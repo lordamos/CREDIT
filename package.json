@@ -1,0 +1,42 @@
+{
+  "name": "credit-acceleration-crm",
+  "version": "1.0.0",
+  "description": "10x Credit Acceleration & PG Management CRM – Palm Bay, FL",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "client": "vite --port 5174",
+    "server": "tsx watch server/index.ts",
+    "build": "tsc && vite build",
+    "preview": "vite preview --port 5174"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "framer-motion": "^13.4.4",
+    "lucide-react": "^0.395.0",
+    "node-mailjet": "^6.0.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^3.10.1",
+    "tailwind-merge": "^2.3.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^9.0.1",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "tsx": "^4.15.2",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.13"
+  }
+}

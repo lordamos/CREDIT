@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { @apply bg-slate-900; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
+  .prose-crm { @apply text-sm text-slate-300 leading-relaxed; }
+  .prose-crm h1 { @apply text-xl font-bold text-white mb-4 mt-6; }
+  .prose-crm h2 { @apply text-lg font-semibold text-blue-300 mb-3 mt-5; }
+  .prose-crm h3 { @apply text-base font-semibold text-slate-200 mb-2 mt-4; }
+  .prose-crm p { @apply mb-3; }
+  .prose-crm ul { @apply list-disc pl-5 mb-3 space-y-1; }
+  .prose-crm li { @apply text-slate-300; }
+  .prose-crm strong { @apply text-white font-semibold; }
+  .prose-crm table { @apply w-full text-sm mb-4 border-collapse; }
+  .prose-crm th { @apply bg-slate-800 text-slate-300 font-semibold px-3 py-2 text-left border border-slate-700; }
+  .prose-crm td { @apply px-3 py-2 border border-slate-800 text-slate-300; }
+  .prose-crm code { @apply bg-slate-800 text-blue-300 px-1 py-0.5 rounded text-xs; }
+  .prose-crm hr { @apply border-slate-700 my-4; }
+  .prose-crm blockquote { @apply border-l-4 border-blue-500 pl-4 text-slate-400 italic my-3; }
+}
