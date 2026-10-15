@@ -335,7 +335,7 @@ export function getClientsNeeding30DayFollowup(clients: Client[]): Client[] {
     if (client.emailLog.some(log => log.stage === 'DISPUTE_30DAY_FOLLOWUP')) return false;
 
     // We check if they have a DISPUTE_LETTER agent result generated > 30 days ago
-    const agentResults = client.agentResults;
+    const agentResults = client.agentOutputs;
     if (!agentResults) return false;
     
     // Check DISPUTE_LETTER or INQUIRY_MINIMIZER

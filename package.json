@@ -4,6 +4,7 @@
   "description": "10x Credit Acceleration & PG Management CRM – Palm Bay, FL",
   "type": "module",
   "scripts": {
+    "start": "tsx server/index.ts",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite --port 5174",
     "server": "tsx watch server/index.ts",
@@ -21,6 +22,7 @@
     "react-dom": "^18.3.1",
     "recharts": "^3.10.1",
     "tailwind-merge": "^2.3.0",
+    "tsx": "^4.15.2",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
@@ -35,7 +37,6 @@
     "concurrently": "^9.0.1",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
-    "tsx": "^4.15.2",
     "typescript": "^5.4.5",
     "vite": "^5.4.21"
   }

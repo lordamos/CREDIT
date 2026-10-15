@@ -1141,8 +1141,7 @@ function runBizComminglingAudit(client: Client): AgentResult {
   }
 
   // Check 3: Owner Draws vs Random ATM Transfers
-  issues.push(`⚠️ **Owner Compensation Audit Check**: Never pull random cash withdrawals or direct Venmo/Zelle transfers without accounting entries. All owner compensation must be formally executed as **Owner Draws / Member Distributions** or **W-2 Payroll** supported by ledger entries.`);
-  if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  passes.push(`ℹ️ **Owner Compensation Audit Check**: Never pull random cash withdrawals or direct Venmo/Zelle transfers without accounting entries. All owner compensation must be formally executed as **Owner Draws / Member Distributions** or **W-2 Payroll** supported by ledger entries.`);
 
   // Check 4: Initial Capitalization & Corporate Veil
   passes.push(`✅ **Corporate Veil Legal Shield**: Maintaining strict accounting separation prevents creditors and litigators from "piercing the corporate veil" to attack personal assets (home, personal savings).`);
@@ -1150,7 +1149,7 @@ function runBizComminglingAudit(client: Client): AgentResult {
   const output = `# 💳 Prompt Four: Business & Personal Financial Commingling & Corporate Veil Audit
 **Entity:** ${companyName}
 **Commercial Banking Status:** ${hasBank ? 'Dedicated Commercial Account Active' : 'CRITICAL: No Dedicated Account'}
-**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Strict Separation)' : verdict === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Operational Cleanup Required)' : '🔴 FIX BEFORE APPLYING (High IRS & Denial Risk)'}
+**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Strict Separation)' : (verdict as ReadinessVerdict) === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Operational Cleanup Required)' : '🔴 FIX BEFORE APPLYING (High IRS & Denial Risk)'}
 
 ---
 
