@@ -14,6 +14,13 @@ import type {
   TrueBuildMetrics 
 } from '../../shared/types/credit.js';
 import { TRUEBUILD_DEFAULT_VENDORS } from '../../shared/types/credit.js';
+import {
+  generateCrossBureauDiscrepancies,
+  initializeFcraSession,
+  generateCfpbComplaint,
+  generateIntentToSueLetter,
+  BUREAU_ADDRESSES
+} from '../core/fcraEngine.js';
 
 export const clientRouter = express.Router();
 
@@ -561,4 +568,185 @@ clientRouter.post('/system/check-overdue', async (_req, res) => {
 
   res.json({ success: true, data: { processed: results.length, results } });
 });
+
+// ============================================================
+// FCRA LEGAL STRATEGY & TRI-BUREAU WALKTHROUGH ENDPOINTS
+// ============================================================
+
+// GET /api/clients/:id/fcra-session
+clientRouter.get('/:id/fcra-session', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+    saveClient(client);
+  } else {
+    // Refresh discrepancies if negative items changed
+    if (client.fcraSession.discrepanciesAudited.length === 0 && client.creditProfile.negativeItems.length > 0) {
+      client.fcraSession.discrepanciesAudited = generateCrossBureauDiscrepancies(client, client.creditProfile);
+      saveClient(client);
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      session: client.fcraSession,
+      bureauAddresses: BUREAU_ADDRESSES
+    }
+  });
+});
+
+// POST /api/clients/:id/fcra-session/step
+clientRouter.post('/:id/fcra-session/step', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { step } = req.body;
+  if (!step || step < 1 || step > 5) {
+    return res.status(400).json({ success: false, error: 'Step must be between 1 and 5' });
+  }
+
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+  }
+
+  client.fcraSession.currentStep = step as 1 | 2 | 3 | 4 | 5;
+  if (!client.fcraSession.completedSteps.includes(step)) {
+    client.fcraSession.completedSteps.push(step);
+  }
+  client.fcraSession.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({ success: true, data: client.fcraSession });
+});
+
+// POST /api/clients/:id/fcra-session/evidence
+clientRouter.post('/:id/fcra-session/evidence', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { title, type, bureau, trackingNumber, dateSentOrDelivered, fileNotes, verified } = req.body;
+  if (!title || !type) {
+    return res.status(400).json({ success: false, error: 'Title and type are required' });
+  }
+
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+  }
+
+  const newEvidence = {
+    id: uuidv4(),
+    title,
+    type,
+    bureau,
+    trackingNumber,
+    dateSentOrDelivered: dateSentOrDelivered || new Date().toISOString().split('T')[0],
+    fileNotes,
+    verified: verified ?? true,
+    createdAt: new Date().toISOString()
+  };
+
+  client.fcraSession.evidenceFiles.push(newEvidence);
+  if (!client.fcraSession.completedSteps.includes(4)) {
+    client.fcraSession.completedSteps.push(4);
+  }
+  client.fcraSession.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({ success: true, data: client.fcraSession });
+});
+
+// POST /api/clients/:id/fcra-session/deadline
+clientRouter.post('/:id/fcra-session/deadline', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { bureau, deliveredDate, trackingNumber, status, outcomeNotes } = req.body;
+  if (!bureau) return res.status(400).json({ success: false, error: 'Bureau is required' });
+
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+  }
+
+  const existingIdx = client.fcraSession.investigationDeadlines.findIndex(d => d.bureau === bureau);
+  
+  let day30Deadline: string | undefined = undefined;
+  if (deliveredDate) {
+    const d = new Date(deliveredDate);
+    d.setDate(d.getDate() + 30);
+    day30Deadline = d.toISOString().split('T')[0];
+  }
+
+  const updatedEntry = {
+    bureau: bureau as 'Equifax' | 'Experian' | 'TransUnion',
+    trackingNumber: trackingNumber || (existingIdx >= 0 ? client.fcraSession.investigationDeadlines[existingIdx].trackingNumber : undefined),
+    deliveredDate: deliveredDate || (existingIdx >= 0 ? client.fcraSession.investigationDeadlines[existingIdx].deliveredDate : undefined),
+    day30Deadline: day30Deadline || (existingIdx >= 0 ? client.fcraSession.investigationDeadlines[existingIdx].day30Deadline : undefined),
+    status: status || (existingIdx >= 0 ? client.fcraSession.investigationDeadlines[existingIdx].status : 'PENDING_DELIVERY'),
+    outcomeNotes: outcomeNotes || (existingIdx >= 0 ? client.fcraSession.investigationDeadlines[existingIdx].outcomeNotes : undefined)
+  };
+
+  if (existingIdx >= 0) {
+    client.fcraSession.investigationDeadlines[existingIdx] = updatedEntry;
+  } else {
+    client.fcraSession.investigationDeadlines.push(updatedEntry);
+  }
+
+  if (!client.fcraSession.completedSteps.includes(3)) {
+    client.fcraSession.completedSteps.push(3);
+  }
+  client.fcraSession.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({ success: true, data: client.fcraSession });
+});
+
+// POST /api/clients/:id/fcra-session/generate-cfpb
+clientRouter.post('/:id/fcra-session/generate-cfpb', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { bureau = 'Experian', trackingNumber, deliveryDate } = req.body;
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+  }
+
+  const draft = generateCfpbComplaint(client, bureau, trackingNumber, deliveryDate);
+  client.fcraSession.cfpbComplaintDraft = draft;
+  if (!client.fcraSession.completedSteps.includes(5)) {
+    client.fcraSession.completedSteps.push(5);
+  }
+  client.fcraSession.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({ success: true, data: { draft, session: client.fcraSession } });
+});
+
+// POST /api/clients/:id/fcra-session/generate-intent-to-sue
+clientRouter.post('/:id/fcra-session/generate-intent-to-sue', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { bureau = 'Experian', trackingNumber, deliveryDate } = req.body;
+  if (!client.fcraSession) {
+    client.fcraSession = initializeFcraSession(client);
+  }
+
+  const discrepancies = client.fcraSession.discrepanciesAudited.length > 0
+    ? client.fcraSession.discrepanciesAudited
+    : generateCrossBureauDiscrepancies(client, client.creditProfile);
+
+  const draft = generateIntentToSueLetter(client, bureau, discrepancies, trackingNumber, deliveryDate);
+  client.fcraSession.intentToSueDraft = draft;
+  if (!client.fcraSession.completedSteps.includes(5)) {
+    client.fcraSession.completedSteps.push(5);
+  }
+  client.fcraSession.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({ success: true, data: { draft, session: client.fcraSession } });
+});
+
 

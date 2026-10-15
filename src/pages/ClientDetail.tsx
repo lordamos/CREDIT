@@ -16,6 +16,7 @@ import type {
 import { PIPELINE_STAGES, AGENT_META, EMAIL_STAGE_META, TRUEBUILD_DEFAULT_VENDORS } from '../types/credit';
 import type { Page } from '../App';
 import { AutoRepairEngine } from '../components/AutoRepairEngine';
+import { FcraWalkthroughEngine } from '../components/FcraWalkthroughEngine';
 import { 
   ArrowLeft, 
   Bot, 
@@ -51,7 +52,8 @@ import {
   Unlock,
   ExternalLink,
   PlusCircle,
-  FastForward
+  FastForward,
+  ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -64,7 +66,7 @@ const EMAIL_STAGES: EmailStage[] = ['WELCOME', 'DOCS_VERIFIED', 'SUBMITTED', 'AP
 
 interface Props { clientId: string; navigate: (p: Page) => void; }
 
-type Tab = 'overview' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
+type Tab = 'overview' | 'fcra-strategy' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
 
 function renderMarkdown(text: string): string {
   return text
@@ -343,6 +345,7 @@ export function ClientDetail({ clientId, navigate }: Props) {
 
   const tabs: { id: Tab; label: string; icon: any; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: FileText },
+    { id: 'fcra-strategy', label: 'FCRA 5-Step Engine', icon: ShieldAlert, count: 5 },
     { id: 'repair', label: 'Auto Repair', icon: Wrench },
     { id: 'business-audit', label: 'Commercial Audit (5 Prompts)', icon: Building2, count: bizAuditsDone },
     { id: 'truebuild', label: 'Corporate Credit (TrueBuild)', icon: Award, count: truebuildData?.profile?.tradelines?.length ?? client.truebuildProfile?.tradelines?.length ?? 0 },
@@ -567,16 +570,51 @@ export function ClientDetail({ clientId, navigate }: Props) {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.18 }}
         >
+          {/* Tab: FCRA 5-Step Deletion Engine */}
+          {tab === 'fcra-strategy' && (
+            <FcraWalkthroughEngine client={client} onUpdate={(updated) => setClient(updated)} />
+          )}
+
           {/* Tab: Auto Repair */}
           {tab === 'repair' && (
             <div className="glass-card rounded-2xl p-6">
-              <AutoRepairEngine client={client} onComplete={(updated) => setClient(updated)} />
+              <AutoRepairEngine 
+                client={client} 
+                onComplete={(updated) => setClient(updated)} 
+                onNavigateToFcra={() => setTab('fcra-strategy')}
+              />
             </div>
           )}
 
           {/* Tab: Overview */}
           {tab === 'overview' && (
             <div className="grid md:grid-cols-2 gap-6">
+              {/* FCRA Deletion Engine Quick Jump Hero */}
+              <div className="md:col-span-2 relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md hover:border-border-gold transition-all duration-300">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lux-gold">
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>FCRA Jurisprudence & Tri-Bureau Discrepancy Engine</span>
+                    </div>
+                    <h3 className="text-lg font-bold text-white">
+                      5-Step Deletion Strategy & Statutory Compensation
+                    </h3>
+                    <p className="text-xs text-slate-300 max-w-2xl">
+                      Cross-compare 15 Metro 2 fields across Equifax, Experian, and TransUnion. Leverage 15 U.S.C. § 1681i, § 1681e(b), § 1681n ($1,000 statutory damages), and the Debt Placement vs. Ownership doctrine.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setTab('fcra-strategy')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-border-gold bg-lux-gold/10 px-5 py-2.5 text-xs font-bold text-lux-gold hover:bg-lux-gold hover:text-canvas-base transition-colors shrink-0 shadow-glow-gold"
+                  >
+                    Launch 5-Step Walkthrough
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
               {/* Pipeline Timeline */}
               <div className="glass-card rounded-2xl p-6">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-4 flex items-center gap-2">

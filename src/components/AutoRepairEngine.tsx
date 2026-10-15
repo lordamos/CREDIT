@@ -6,6 +6,7 @@ const API = 'http://localhost:3002/api';
 interface Props {
   client: Client;
   onComplete: (updatedClient: Client) => void;
+  onNavigateToFcra?: () => void;
 }
 
 interface ParseSummary {
@@ -19,7 +20,7 @@ interface ParseSummary {
 
 type Step = 'PASTE' | 'PROCESSING' | 'RESULTS';
 
-export function AutoRepairEngine({ client, onComplete }: Props) {
+export function AutoRepairEngine({ client, onComplete, onNavigateToFcra }: Props) {
   const [step, setStep] = useState<Step>('PASTE');
   const [reportText, setReportText] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -201,22 +202,43 @@ export function AutoRepairEngine({ client, onComplete }: Props) {
           )}
 
           {/* Next steps */}
-          <div className="bg-blue-950 border border-blue-800 rounded-xl p-4 space-y-2">
-            <h4 className="text-blue-300 font-semibold text-sm">🎯 Next Steps</h4>
-            <div className="space-y-1 text-xs text-blue-200">
-              <p>1. 🔍 Click the <strong>Agents</strong> tab to review the full audit and 90-day roadmap</p>
-              <p>2. ⚖️ Click the <strong>Letters</strong> tab to preview and print your dispute letters</p>
-              <p>3. 🖨️ Print each letter and mail via USPS Certified Mail with Return Receipt</p>
-              <p>4. 📅 Mark your calendar 30 days from mailing — bureaus must respond by then</p>
-              <p>5. 💳 Execute the AZEO utilization strategy NOW for an immediate score boost</p>
+          <div className="bg-blue-950/80 border border-blue-800/80 rounded-xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-blue-300 font-bold text-sm">🎯 Recommended Action: 5-Step FCRA Strategy</h4>
+              {onNavigateToFcra && (
+                <button
+                  onClick={onNavigateToFcra}
+                  className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-colors shadow-sm"
+                >
+                  Open 5-Step Engine →
+                </button>
+              )}
+            </div>
+            <div className="space-y-1.5 text-xs text-blue-200/90 leading-relaxed">
+              <p>1. 🔍 <strong>Cross-Bureau Error Audit:</strong> Compare 15 Metro 2 fields across Equifax, Experian, and TransUnion.</p>
+              <p>2. ⚖️ <strong>Documented Dispute:</strong> Send customized letters in consumer voice citing 15 U.S.C. § 1681i and § 1681e(b).</p>
+              <p>3. 📅 <strong>30-Day Clock:</strong> Bureaus have 30 days from confirmed USPS delivery to conduct genuine reinvestigation.</p>
+              <p>4. 🗄️ <strong>Evidence File:</strong> Retain postal tracking, copies of signed letters, and bureau notices.</p>
+              <p>5. 🏛️ <strong>Escalate:</strong> If unverified or unanswered, file CFPB complaint and serve Notice of Intent to Sue under § 1681n.</p>
             </div>
           </div>
 
-          <button
-            onClick={() => setStep('PASTE')}
-            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors">
-            🔄 Re-run with Updated Report
-          </button>
+          <div className="flex gap-2">
+            {onNavigateToFcra && (
+              <button
+                onClick={onNavigateToFcra}
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5"
+              >
+                Launch FCRA 5-Step Engine →
+              </button>
+            )}
+            <button
+              onClick={() => setStep('PASTE')}
+              className="py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition-colors"
+            >
+              🔄 Re-run Report
+            </button>
+          </div>
         </div>
       )}
     </div>

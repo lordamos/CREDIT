@@ -1,5 +1,6 @@
 import type { Client, AgentId, AgentResult, NegativeItem, DisputeLetter, CreditProfile, ReadinessVerdict } from '../../shared/types/credit.js';
 import { v4 as uuidv4 } from 'uuid';
+import { runFcraStatutoryAudit } from './fcraEngine.js';
 
 // ── Agent Runner ──────────────────────────────────────────────
 // Each agent takes the client's credit & business profile and generates structured output.
@@ -24,6 +25,8 @@ export async function runAgent(client: Client, agentId: AgentId): Promise<AgentR
     case 'BIZ_NAICS_CLASSIFICATION': return runBizNaicsAudit(client);
     case 'BIZ_COMMINGLING_FINANCES': return runBizComminglingAudit(client);
     case 'BIZ_FUNDING_READINESS': return runBizFundingReadiness(client);
+    // ── FCRA Tri-Bureau Discrepancy & Statutory Action Engine ──
+    case 'FCRA_STATUTORY_AUDIT': return runFcraStatutoryAudit(client, profile);
     default: throw new Error(`Unknown agent: ${agentId}`);
   }
 }
@@ -341,12 +344,18 @@ ${bureau === 'Equifax' ? 'P.O. Box 740256\nAtlanta, GA 30374' :
   bureau === 'Experian' ? 'P.O. Box 4500\nAllen, TX 75013' :
   'P.O. Box 2000\nChester, PA 19016'}
 
-Re: Formal Request to Investigate & Remove Inaccurate / Unverifiable Credit Information
-Pursuant to: Fair Credit Reporting Act (FCRA) 15 U.S.C. § 1681 et seq., § 611, § 623
+Re: Formal Notice of Material Inaccuracies & Demand for Mandatory Reinvestigation
+Pursuant to: 15 U.S.C. § 1681i (FCRA § 611), 15 U.S.C. § 1681e(b) (FCRA § 607(b)), 15 U.S.C. § 1681n, 15 U.S.C. § 1681o
 
 To Whom It May Concern at ${bureau}:
 
 ${rIntro}
+
+NOTICE OF PRIVATE CORPORATE STATUS & CROSS-BUREAU DISCREPANCY:
+Please take note that as a private, for-profit consumer reporting agency subject to federal regulation (and not a government entity), you are required under 15 U.S.C. § 1681e(b) to maintain reasonable procedures to assure maximum possible accuracy of all reported data. A contemporaneous line-by-line comparison of my credit files across Experian, Equifax, and TransUnion reveals direct discrepancies across key reporting fields (including contradictory account numbers, conflicting opening dates, incompatible delinquency chronologies, and mismatched balances). It is legally and factually impossible for the same debt obligation to report conflicting metrics across nationwide bureaus while satisfying your statutory mandate for maximum possible accuracy.
+
+LEGAL NOTICE: DEBT PLACEMENT VS. DEBT OWNERSHIP DOCTRINE:
+Furthermore, take notice that this dispute is grounded in strict procedural and evidentiary compliance under federal law. Consumer credit reporting disputes do NOT turn on whether an alleged debt was originally placed with or assigned to a third party. Rather, credit reporting agencies and data furnishers bear the absolute legal burden to substantiate every element of reported data with uncorrupted, certified records under Metro 2 and FCRA standards. If you or your data furnisher cannot fully validate or consistently report this information, the law requires immediate and permanent deletion.
 
 DISPUTED ITEMS:
 
@@ -356,18 +365,22 @@ ${bureauItems.map((item, i) => {
    Account Number: ${item.accountNumber ?? 'Unknown'}
    Type: ${item.type.replace(/_/g, ' ')}
    
-   BASIS FOR DISPUTE: This account is disputed as inaccurate, incomplete, and/or unverifiable. The reported information contains material errors and/or cannot be verified to comply with Metro 2 reporting standards. Specifically, I dispute the accuracy of the payment history, high balance, and Date of First Delinquency.
+   BASIS FOR DISPUTE: This account contains material errors and conflicting reporting across nationwide consumer reporting agencies, in direct contradiction to 15 U.S.C. § 1681e(b). Specifically, I dispute the validity, historical payment chronology, high balance, and Date of First Delinquency (DOFD).
    
-   LEGAL DEMAND: ${rDemand}`;
-}).join('\\n\\n')}
+   LEGAL DEMAND: ${rDemand} Demand is hereby made for the certified Method of Verification pursuant to 15 U.S.C. § 1681i(a)(6)(B)(iii).`;
+}).join('\n\n')}
 
-LEGAL NOTICE & DEMAND FOR ACTION:
+LEGAL NOTICE & STATUTORY DEMANDS:
+Pursuant to the Fair Credit Reporting Act, 15 U.S.C. § 1681 et seq., you are hereby placed on formal legal notice:
+1. MANDATORY REINVESTIGATION (15 U.S.C. § 1681i / FCRA § 611): You are legally required to conduct a prompt and reasonable reinvestigation of each disputed item within THIRTY (30) DAYS. The Consumer Financial Protection Bureau (CFPB) has repeatedly penalized credit bureaus for relying upon automated dismissals or passing superficial two-digit e-OSCAR codes without substantive human inquiry.
+2. MAXIMUM POSSIBLE ACCURACY (15 U.S.C. § 1681e(b) / FCRA § 607(b)): The identified cross-bureau discrepancies establish prima facie proof that your reporting procedures fail to assure maximum possible accuracy.
+3. MANDATORY DELETION (15 U.S.C. § 1681i(a)(5)(A)): If you or the furnisher cannot verify every disputed metric with original documentation within 30 days, you are legally commanded to PERMANENTLY DELETE the disputed item(s).
+4. WILLFUL NON-COMPLIANCE LIABILITY (15 U.S.C. § 1681n / FCRA § 616): If your agency willfully fails to comply with these statutory duties—including through automated dismissals or ignoring documented cross-bureau contradictions—you are liable for statutory damages between $100 and $1,000 per violation, actual damages, punitive damages, and attorney's fees.
+5. NEGLIGENT NON-COMPLIANCE (15 U.S.C. § 1681o / FCRA § 617): You remain liable for all actual financial and compensatory damages resulting from negligent failure to maintain accurate records.
 
-Pursuant to the Fair Credit Reporting Act, 15 U.S.C. § 1681i, you are hereby required to:
-1. Conduct a REASONABLE REINVESTIGATION of the above-listed disputed information within THIRTY (30) DAYS.
-2. If you are UNABLE TO FULLY VERIFY each element, you are LEGALLY REQUIRED to PERMANENTLY DELETE the disputed item(s) under FCRA § 611(a)(5)(A).
+EVIDENCE PRESERVATION:
+A formal legal evidence file—including copies of my contemporaneous tri-merge credit report, this signed dispute, and USPS Certified Mail postal tracking confirmation—has been preserved. If unverified items are not removed within 30 days, formal regulatory complaints will be lodged with the Consumer Financial Protection Bureau (CFPB) and legal escalation will proceed.
 
-PLEASE BE ADVISED that I am aware of my rights under FCRA § 611, § 623, § 616, and § 617.
 ${rSignoff}
 
 Sincerely,

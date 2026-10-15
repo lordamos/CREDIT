@@ -29,7 +29,9 @@ export type AgentId =
   | 'BIZ_ADDRESS_FOOTPRINT'
   | 'BIZ_NAICS_CLASSIFICATION'
   | 'BIZ_COMMINGLING_FINANCES'
-  | 'BIZ_FUNDING_READINESS';
+  | 'BIZ_FUNDING_READINESS'
+  // ── FCRA Tri-Bureau Discrepancy & Statutory Action Engine ──
+  | 'FCRA_STATUTORY_AUDIT';
 
 export type AddressType =
   | 'BRICK_AND_MORTAR'
@@ -199,6 +201,7 @@ export interface Client {
   intakeToken: string; // unique URL token for public intake form
   // Credit Data
   creditProfile: CreditProfile;
+  fcraSession?: FcraWalkthroughSession;
   // Operations
   agentOutputs: Partial<Record<AgentId, AgentResult>>;
   emailLog: EmailLogEntry[];
@@ -206,6 +209,74 @@ export interface Client {
   invoice?: Invoice;
   notes: string;
   createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+// FCRA LEGAL STRATEGY & TRI-BUREAU WALKTHROUGH TYPES
+// ============================================================
+
+export interface CrossBureauFieldComparison {
+  fieldName: string;
+  equifaxValue?: string;
+  experianValue?: string;
+  transunionValue?: string;
+  isDiscrepancy: boolean;
+  legalViolationNote?: string;
+}
+
+export interface CrossBureauAccountAudit {
+  id: string;
+  creditor: string;
+  accountNumberMasked: string;
+  accountType: string;
+  fields: CrossBureauFieldComparison[];
+  hasDiscrepancy: boolean;
+  accuracyViolationCited: boolean; // 15 U.S.C. § 1681e(b)
+  disputeGrounds: string[];
+}
+
+export interface FcraEvidenceFile {
+  id: string;
+  title: string;
+  type:
+    | 'INITIAL_REPORT'
+    | 'SIGNED_DISPUTE'
+    | 'CERTIFIED_MAIL_RECEIPT'
+    | 'USPS_DELIVERY_CONFIRMATION'
+    | 'BUREAU_RESPONSE'
+    | 'CFPB_CONFIRMATION';
+  bureau?: 'Equifax' | 'Experian' | 'TransUnion';
+  trackingNumber?: string;
+  dateSentOrDelivered?: string;
+  fileNotes?: string;
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface BureauInvestigationDeadline {
+  bureau: 'Equifax' | 'Experian' | 'TransUnion';
+  trackingNumber?: string;
+  deliveredDate?: string;
+  day30Deadline?: string;
+  status:
+    | 'PENDING_DELIVERY'
+    | 'UNDER_INVESTIGATION'
+    | '30_DAYS_EXPIRED'
+    | 'DELETED'
+    | 'VERIFIED_WITHOUT_METHOD'
+    | 'UPDATED';
+  outcomeNotes?: string;
+}
+
+export interface FcraWalkthroughSession {
+  currentStep: 1 | 2 | 3 | 4 | 5;
+  discrepanciesAudited: CrossBureauAccountAudit[];
+  evidenceFiles: FcraEvidenceFile[];
+  investigationDeadlines: BureauInvestigationDeadline[];
+  cfpbComplaintDraft?: string;
+  intentToSueDraft?: string;
+  completedSteps: number[];
   updatedAt: string;
 }
 
@@ -337,6 +408,8 @@ export const AGENT_META: Record<AgentId, { title: string; icon: string; descript
   BIZ_NAICS_CLASSIFICATION: { title: 'Operational NAICS Code', icon: '🏷️', description: 'Prompt 3: Actual operations classification vs underwriter risk trap' },
   BIZ_COMMINGLING_FINANCES: { title: 'Commingling & Corporate Veil', icon: '💳', description: 'Prompt 4: Forensic personal vs business funds & IRS/veil protection' },
   BIZ_FUNDING_READINESS: { title: 'Funding Readiness Evaluation', icon: '🎯', description: 'Prompt 5: Synthesis score, Ready/Attention/Fix badges & action plan' },
+  // ── FCRA Tri-Bureau Discrepancy & Statutory Action Engine ──
+  FCRA_STATUTORY_AUDIT: { title: 'FCRA Statutory Audit & Tri-Bureau Discrepancy', icon: '⚖️', description: 'Cross-bureau comparison across 15 fields, 15 U.S.C. § 1681i/e(b)/n/o & 5-step playbook' },
 };
 
 export const EMAIL_STAGE_META: Record<EmailStage, { subject: string; trigger: string; icon: string }> = {
