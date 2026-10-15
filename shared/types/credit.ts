@@ -190,6 +190,7 @@ export interface Client {
   ein?: string;
   businessType?: string;
   businessProfile?: BusinessProfile;
+  truebuildProfile?: TrueBuildProfile;
   // Contract
   plan: PricingPlan;
   stage: PipelineStage;
@@ -207,6 +208,79 @@ export interface Client {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface TrueBuildVendor {
+  id: number;
+  name: string;
+  tier: 1 | 2 | 3 | 4;
+  category: string;
+  terms: string;
+  minInvoice: number;
+  reportsTo: string;
+  pgRequired: boolean;
+  applicationUrl: string;
+  underwritingTips: string;
+  applied?: boolean;
+  locked?: boolean;
+}
+
+export interface TrueBuildTradeline {
+  id: string;
+  vendorId: number;
+  vendorName: string;
+  tier: number;
+  creditLimit: number;
+  accountNumber: string;
+  openedDate: string;
+  status: 'APPROVED' | 'PENDING';
+  reportsTo: string;
+}
+
+export interface TrueBuildPaymentRecord {
+  id: string;
+  tradelineId: string;
+  vendorName: string;
+  invoiceNumber: string;
+  invoiceAmount: number;
+  invoiceDate: string;
+  paidDate: string;
+  daysRelativeToDue: number;
+  status: 'PAID';
+}
+
+export interface TrueBuildMetrics {
+  paydexScore: number | null;
+  experianIntelliscore: number | null;
+  equifaxCommercial: number | null;
+  unlockedTier: 1 | 2 | 3 | 4;
+  totalCreditLimit: number;
+  tier1Count: number;
+  tier2Count: number;
+  tier3Count: number;
+  tier4Count: number;
+}
+
+export interface TrueBuildProfile {
+  dunsNumber?: string;
+  metrics: TrueBuildMetrics;
+  tradelines: TrueBuildTradeline[];
+  paymentRecords: TrueBuildPaymentRecord[];
+}
+
+export const TRUEBUILD_DEFAULT_VENDORS: TrueBuildVendor[] = [
+  { id: 1, name: 'Uline', tier: 1, category: 'Shipping Supplies', terms: 'Net 30', minInvoice: 50.0, reportsTo: 'Experian, D&B', pgRequired: false, applicationUrl: 'https://www.uline.com/CustomerService/CreditApplication', underwritingTips: "Check 'Invoice My Account' at checkout." },
+  { id: 2, name: 'Grainger', tier: 1, category: 'Industrial/MRO', terms: 'Net 30', minInvoice: 50.0, reportsTo: 'D&B', pgRequired: false, applicationUrl: 'https://www.grainger.com/content/credit-services', underwritingTips: 'Requires active state LLC registration.' },
+  { id: 3, name: 'Quill', tier: 1, category: 'Office Supplies', terms: 'Net 30', minInvoice: 100.0, reportsTo: 'D&B', pgRequired: false, applicationUrl: 'https://www.quill.com/account/net30terms', underwritingTips: 'Place 1-2 small pre-paid orders first.' },
+  { id: 4, name: 'Nav Prime', tier: 1, category: 'Financial Monitoring', terms: 'Net 30', minInvoice: 49.99, reportsTo: 'D&B, Experian, Equifax', pgRequired: false, applicationUrl: 'https://www.nav.com', underwritingTips: 'Reports monthly to all three corporate credit bureaus.' },
+  { id: 5, name: 'The CEO Creative', tier: 1, category: 'Office Supplies', terms: 'Net 30', minInvoice: 60.0, reportsTo: 'Equifax, CreditSafe', pgRequired: false, applicationUrl: 'https://theceocreative.com/net-30-application/', underwritingTips: 'Requires min $60 initial catalog purchase.' },
+  { id: 6, name: 'Home Depot Pro Commercial', tier: 2, category: 'Hardware & Building', terms: 'Revolving / Net 30', minInvoice: 100.0, reportsTo: 'Experian, D&B', pgRequired: false, applicationUrl: 'https://www.homedepot.com/c/Credit_Center', underwritingTips: 'Apply under Commercial Revolving account.' },
+  { id: 7, name: 'WEX Fleet Fuel Card', tier: 2, category: 'Fuel Services', terms: 'Net 15 / Net 30', minInvoice: 75.0, reportsTo: 'Experian, D&B', pgRequired: false, applicationUrl: 'https://www.wexinc.com/solutions/fleet-cards/', underwritingTips: 'Fleet card; strictly reports early payment velocity.' },
+  { id: 8, name: 'Staples Business Advantage', tier: 2, category: 'Commercial Supplies', terms: 'Revolving', minInvoice: 100.0, reportsTo: 'D&B', pgRequired: false, applicationUrl: 'https://www.staples.com/credit', underwritingTips: 'Requires 3+ reporting tradelines on D&B.' },
+  { id: 9, name: 'Amazon Business American Express', tier: 3, category: 'General Purchasing', terms: 'Net 60 / Revolving', minInvoice: 250.0, reportsTo: 'Experian, D&B', pgRequired: false, applicationUrl: 'https://www.amazon.com/businesscredit', underwritingTips: "Select 'Company Liability Only' option." },
+  { id: 10, name: "Sam's Club Business Mastercard", tier: 3, category: 'Club Store / Equipment', terms: 'Revolving', minInvoice: 250.0, reportsTo: 'D&B, Experian, Equifax', pgRequired: false, applicationUrl: 'https://www.samsclub.com/credit', underwritingTips: 'Synchrony Bank commercial underwriting rules.' },
+  { id: 11, name: 'Chase Ink Business Preferred', tier: 4, category: 'Commercial Bank Card', terms: 'Revolving', minInvoice: 500.0, reportsTo: 'Equifax, Experian', pgRequired: true, applicationUrl: 'https://creditcards.chase.com/business', underwritingTips: 'Requires personal guarantor credit score 680+.' },
+  { id: 12, name: 'Bank of America Business Advantage', tier: 4, category: 'Credit Line / Card', terms: 'Revolving', minInvoice: 1000.0, reportsTo: 'Experian, Equifax', pgRequired: true, applicationUrl: 'https://www.bankofamerica.com/smallbusiness/credit-cards/', underwritingTips: 'Established commercial bank deposits accelerate limit increases.' },
+];
 
 export interface ProviderSettings {
   name: string;

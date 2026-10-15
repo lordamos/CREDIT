@@ -4,7 +4,16 @@ import { getAllClients, getClientById, saveClient, deleteClient, getClientByToke
 import { dispatchEmail, getClientsNeedingOverdueAlert, getClientsNeedingPostCare } from '../core/emailScheduler.js';
 import { runAllAgents, runAllBusinessAudits, runAgent } from '../core/agentRunner.js';
 import { parseReport } from '../core/reportParser.js';
-import type { Client, PricingPlan, PipelineStage } from '../../shared/types/credit.js';
+import type { 
+  Client, 
+  PricingPlan, 
+  PipelineStage, 
+  TrueBuildVendor, 
+  TrueBuildTradeline, 
+  TrueBuildPaymentRecord, 
+  TrueBuildMetrics 
+} from '../../shared/types/credit.js';
+import { TRUEBUILD_DEFAULT_VENDORS } from '../../shared/types/credit.js';
 
 export const clientRouter = express.Router();
 
@@ -224,6 +233,188 @@ clientRouter.post('/:id/credit-profile', async (req, res) => {
   client.creditProfile = { ...client.creditProfile, ...req.body };
   saveClient(client);
   res.json({ success: true, data: client });
+});
+
+// ── TrueBuild Corporate Tradeline & Paydex Engine ──
+
+function calculateTrueBuildMetrics(tradelines: TrueBuildTradeline[] = [], paymentRecords: TrueBuildPaymentRecord[] = []): TrueBuildMetrics {
+  const dnbScores: number[] = [];
+  const expScores: number[] = [];
+  const eqScores: number[] = [];
+
+  for (const p of paymentRecords) {
+    const tl = tradelines.find(t => t.id === p.tradelineId);
+    const rpts = tl?.reportsTo || '';
+    const delta = p.daysRelativeToDue;
+    const score = delta <= -30 ? 100 : (delta <= -15 ? 90 : (delta <= 0 ? 80 : (delta <= 15 ? 70 : (delta <= 30 ? 60 : 50))));
+
+    if (rpts.includes('D&B')) dnbScores.push(score);
+    if (rpts.includes('Experian')) expScores.push(score);
+    if (rpts.includes('Equifax')) eqScores.push(score);
+  }
+
+  const paydex = dnbScores.length > 0 ? Math.round(dnbScores.reduce((a, b) => a + b, 0) / dnbScores.length) : null;
+  const experian = expScores.length > 0 ? Math.round(expScores.reduce((a, b) => a + b, 0) / expScores.length) : null;
+  const equifax = eqScores.length > 0 ? Math.round(eqScores.reduce((a, b) => a + b, 0) / eqScores.length) : null;
+
+  const t1 = tradelines.filter(t => t.tier === 1 && t.status === 'APPROVED').length;
+  const t2 = tradelines.filter(t => t.tier === 2 && t.status === 'APPROVED').length;
+  const t3 = tradelines.filter(t => t.tier === 3 && t.status === 'APPROVED').length;
+  const t4 = tradelines.filter(t => t.tier === 4 && t.status === 'APPROVED').length;
+
+  let unlocked: 1 | 2 | 3 | 4 = 1;
+  const eff = paydex || 0;
+  if (t1 >= 5 && eff >= 80) unlocked = 2;
+  if (unlocked === 2 && t2 >= 3 && eff >= 80) unlocked = 3;
+  if (unlocked === 3 && t3 >= 3 && eff >= 80) unlocked = 4;
+
+  const total = tradelines.filter(t => t.status === 'APPROVED').reduce((sum, t) => sum + (t.creditLimit || 0), 0);
+
+  return {
+    paydexScore: paydex,
+    experianIntelliscore: experian,
+    equifaxCommercial: equifax,
+    unlockedTier: unlocked,
+    totalCreditLimit: total,
+    tier1Count: t1,
+    tier2Count: t2,
+    tier3Count: t3,
+    tier4Count: t4,
+  };
+}
+
+// GET client's TrueBuild profile, metrics and vendor matrix
+clientRouter.get('/:id/truebuild', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.truebuildProfile) {
+    client.truebuildProfile = {
+      dunsNumber: 'Pending D&B Generation',
+      metrics: calculateTrueBuildMetrics([], []),
+      tradelines: [],
+      paymentRecords: [],
+    };
+    saveClient(client);
+  } else {
+    client.truebuildProfile.metrics = calculateTrueBuildMetrics(client.truebuildProfile.tradelines, client.truebuildProfile.paymentRecords);
+  }
+
+  const appliedVendorIds = new Set(client.truebuildProfile.tradelines.map(t => t.vendorId));
+  const unlockedTier = client.truebuildProfile.metrics.unlockedTier;
+
+  const vendors = TRUEBUILD_DEFAULT_VENDORS.map(v => ({
+    ...v,
+    applied: appliedVendorIds.has(v.id),
+    locked: v.tier > unlockedTier,
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      profile: client.truebuildProfile,
+      vendors,
+      metrics: client.truebuildProfile.metrics,
+    }
+  });
+});
+
+// POST link new tradeline for client
+clientRouter.post('/:id/truebuild/link-tradeline', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { vendorId, accountNumber, creditLimit } = req.body;
+  const vendor = TRUEBUILD_DEFAULT_VENDORS.find(v => v.id === Number(vendorId));
+  if (!vendor) return res.status(400).json({ success: false, error: 'Invalid vendor ID' });
+
+  if (!client.truebuildProfile) {
+    client.truebuildProfile = {
+      dunsNumber: 'Pending D&B Generation',
+      metrics: calculateTrueBuildMetrics([], []),
+      tradelines: [],
+      paymentRecords: [],
+    };
+  }
+
+  const newTradeline: TrueBuildTradeline = {
+    id: uuidv4(),
+    vendorId: vendor.id,
+    vendorName: vendor.name,
+    tier: vendor.tier,
+    creditLimit: Number(creditLimit) || 500,
+    accountNumber: accountNumber || `ACC-${Math.floor(100000 + Math.random() * 900000)}`,
+    openedDate: new Date().toISOString().split('T')[0],
+    status: 'APPROVED',
+    reportsTo: vendor.reportsTo,
+  };
+
+  client.truebuildProfile.tradelines.push(newTradeline);
+  client.truebuildProfile.metrics = calculateTrueBuildMetrics(client.truebuildProfile.tradelines, client.truebuildProfile.paymentRecords);
+  saveClient(client);
+
+  res.json({ success: true, data: client.truebuildProfile });
+});
+
+// POST simulate 30-day corporate credit payment cycle
+clientRouter.post('/:id/truebuild/simulate-cycle', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.truebuildProfile) {
+    client.truebuildProfile = {
+      dunsNumber: 'Pending D&B Generation',
+      metrics: calculateTrueBuildMetrics([], []),
+      tradelines: [],
+      paymentRecords: [],
+    };
+  }
+
+  // If no tradelines exist, auto-seed 3 Tier-1 starter lines to demonstrate progression
+  if (client.truebuildProfile.tradelines.length === 0) {
+    const starterVendors = TRUEBUILD_DEFAULT_VENDORS.slice(0, 3);
+    for (const sv of starterVendors) {
+      client.truebuildProfile.tradelines.push({
+        id: uuidv4(),
+        vendorId: sv.id,
+        vendorName: sv.name,
+        tier: sv.tier,
+        creditLimit: 1000,
+        accountNumber: `ACC-${Math.floor(100000 + Math.random() * 900000)}`,
+        openedDate: new Date().toISOString().split('T')[0],
+        status: 'APPROVED',
+        reportsTo: sv.reportsTo,
+      });
+    }
+  }
+
+  const now = new Date();
+  for (const tl of client.truebuildProfile.tradelines) {
+    const v = TRUEBUILD_DEFAULT_VENDORS.find(vend => vend.id === tl.vendorId);
+    const minAmt = v?.minInvoice || 50;
+    const invAmt = minAmt + Math.floor(Math.random() * 45);
+    const invDate = new Date(now.getTime() - 25 * 86400000).toISOString().split('T')[0];
+    const paidDate = new Date(now.getTime() - 5 * 86400000).toISOString().split('T')[0];
+    // Paid 20 days early (-20 days delta relative to due date) -> Earns 90-100 Paydex score
+    const earlyDelta = -20 - Math.floor(Math.random() * 10);
+
+    client.truebuildProfile.paymentRecords.push({
+      id: uuidv4(),
+      tradelineId: tl.id,
+      vendorName: tl.vendorName,
+      invoiceNumber: `INV-${Math.floor(10000 + Math.random() * 90000)}`,
+      invoiceAmount: invAmt,
+      invoiceDate: invDate,
+      paidDate: paidDate,
+      daysRelativeToDue: earlyDelta,
+      status: 'PAID',
+    });
+  }
+
+  client.truebuildProfile.metrics = calculateTrueBuildMetrics(client.truebuildProfile.tradelines, client.truebuildProfile.paymentRecords);
+  saveClient(client);
+
+  res.json({ success: true, data: client.truebuildProfile });
 });
 
 // POST send specific email manually

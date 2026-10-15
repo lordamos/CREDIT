@@ -643,6 +643,29 @@ export function Dashboard({ navigate }: Props) {
                           </div>
                           <div className="text-[11px] text-slate-400 truncate mt-0.5">{c.companyName || 'Private Asset'}</div>
                           
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                            {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'READY' && (
+                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                5P: READY
+                              </span>
+                            )}
+                            {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'NEEDS_ATTENTION' && (
+                              <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                5P: ATTN
+                              </span>
+                            )}
+                            {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'FIX_BEFORE_APPLYING' && (
+                              <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                                5P: FIX FIRST
+                              </span>
+                            )}
+                            {c.truebuildProfile?.metrics?.paydexScore ? (
+                              <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                Paydex {c.truebuildProfile.metrics.paydexScore}
+                              </span>
+                            ) : null}
+                          </div>
+
                           <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/[0.06]">
                             <span className="text-[10px] font-semibold text-lux-gold px-1.5 py-0.5 rounded bg-amber-500/10 border border-border-gold">
                               Tier {c.plan}
@@ -690,6 +713,28 @@ export function Dashboard({ navigate }: Props) {
                     <span className="text-slate-400 font-normal text-xs ml-2">· {c.companyName || 'Private Asset'}</span>
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5">{c.email} · {c.phone}</div>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                    {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'READY' && (
+                      <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        5P: READY
+                      </span>
+                    )}
+                    {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'NEEDS_ATTENTION' && (
+                      <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                        5P: ATTN
+                      </span>
+                    )}
+                    {c.agentOutputs?.['BIZ_FUNDING_READINESS']?.verdict === 'FIX_BEFORE_APPLYING' && (
+                      <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                        5P: FIX FIRST
+                      </span>
+                    )}
+                    {c.truebuildProfile?.metrics?.paydexScore ? (
+                      <span className="text-[9px] font-bold text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                        Paydex {c.truebuildProfile.metrics.paydexScore}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold border ${STAGE_BADGE[meta.color]}`}>

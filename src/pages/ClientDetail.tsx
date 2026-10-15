@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import type { Client, AgentId, PipelineStage, EmailStage, BusinessProfile, AddressType, ReadinessVerdict } from '../types/credit';
-import { PIPELINE_STAGES, AGENT_META, EMAIL_STAGE_META } from '../types/credit';
+import type { 
+  Client, 
+  AgentId, 
+  PipelineStage, 
+  EmailStage, 
+  BusinessProfile, 
+  AddressType, 
+  ReadinessVerdict,
+  TrueBuildVendor,
+  TrueBuildTradeline,
+  TrueBuildPaymentRecord,
+  TrueBuildMetrics,
+  TrueBuildProfile
+} from '../types/credit';
+import { PIPELINE_STAGES, AGENT_META, EMAIL_STAGE_META, TRUEBUILD_DEFAULT_VENDORS } from '../types/credit';
 import type { Page } from '../App';
 import { AutoRepairEngine } from '../components/AutoRepairEngine';
 import { 
@@ -31,7 +44,14 @@ import {
   Sliders,
   Play,
   Award,
-  X
+  X,
+  Briefcase,
+  CreditCard,
+  Lock,
+  Unlock,
+  ExternalLink,
+  PlusCircle,
+  FastForward
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -44,7 +64,7 @@ const EMAIL_STAGES: EmailStage[] = ['WELCOME', 'DOCS_VERIFIED', 'SUBMITTED', 'AP
 
 interface Props { clientId: string; navigate: (p: Page) => void; }
 
-type Tab = 'overview' | 'repair' | 'agents' | 'business-audit' | 'emails' | 'disputes' | 'agreement';
+type Tab = 'overview' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
 
 function renderMarkdown(text: string): string {
   return text
@@ -131,6 +151,27 @@ export function ClientDetail({ clientId, navigate }: Props) {
   const [savingBizProfile, setSavingBizProfile] = useState(false);
   const [bizFormData, setBizFormData] = useState<BusinessProfile>({});
 
+  // TrueBuild Corporate Credit Tradeline State
+  const [truebuildData, setTruebuildData] = useState<{ profile?: TrueBuildProfile; vendors?: TrueBuildVendor[]; metrics?: TrueBuildMetrics } | null>(null);
+  const [simulatingCycle, setSimulatingCycle] = useState(false);
+  const [showLinkTradelineModal, setShowLinkTradelineModal] = useState(false);
+  const [linkVendorId, setLinkVendorId] = useState<number>(1);
+  const [linkAccountNumber, setLinkAccountNumber] = useState('');
+  const [linkCreditLimit, setLinkCreditLimit] = useState<number>(1000);
+  const [tierFilter, setTierFilter] = useState<number>(0);
+
+  const loadTrueBuild = async () => {
+    try {
+      const res = await fetch(`${API}/clients/${clientId}/truebuild`);
+      const json = await res.json();
+      if (json.success) {
+        setTruebuildData(json.data);
+      }
+    } catch (e) {
+      console.error('Error fetching TrueBuild data:', e);
+    }
+  };
+
   const load = async () => {
     setLoading(true);
     try {
@@ -140,10 +181,41 @@ export function ClientDetail({ clientId, navigate }: Props) {
       if (json.data?.businessProfile) {
         setBizFormData(json.data.businessProfile);
       }
+      await loadTrueBuild();
     } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [clientId]);
+
+  const simulateCycle = async () => {
+    setSimulatingCycle(true);
+    try {
+      await fetch(`${API}/clients/${clientId}/truebuild/simulate-cycle`, { method: 'POST' });
+      await load();
+    } finally {
+      setSimulatingCycle(false);
+    }
+  };
+
+  const submitLinkTradeline = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await fetch(`${API}/clients/${clientId}/truebuild/link-tradeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vendorId: linkVendorId,
+          accountNumber: linkAccountNumber,
+          creditLimit: linkCreditLimit
+        })
+      });
+      setShowLinkTradelineModal(false);
+      setLinkAccountNumber('');
+      await load();
+    } catch (e) {
+      console.error('Error linking tradeline:', e);
+    }
+  };
 
   const runAgents = async () => {
     setRunningAgents(true);
@@ -273,6 +345,7 @@ export function ClientDetail({ clientId, navigate }: Props) {
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'repair', label: 'Auto Repair', icon: Wrench },
     { id: 'business-audit', label: 'Commercial Audit (5 Prompts)', icon: Building2, count: bizAuditsDone },
+    { id: 'truebuild', label: 'Corporate Credit (TrueBuild)', icon: Award, count: truebuildData?.profile?.tradelines?.length ?? client.truebuildProfile?.tradelines?.length ?? 0 },
     { id: 'agents', label: 'AI Agents', icon: Bot, count: agentsDone },
     { id: 'emails', label: 'Emails', icon: Mail, count: client.emailLog.length },
     { id: 'disputes', label: 'Dispute Letters', icon: Scale, count: client.disputes.length },
@@ -777,6 +850,247 @@ export function ClientDetail({ clientId, navigate }: Props) {
                     </motion.div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab: TrueBuild Corporate Credit Tradeline Engine */}
+          {tab === 'truebuild' && (
+            <div className="space-y-6">
+              {/* Executive Suite Corporate Tri-Bureau Metrics Banner */}
+              <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md transition-all duration-300 hover:border-border-gold hover:shadow-glow-gold">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
+
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-lux-gold">
+                        TrueBuild Corporate Engine
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        Autonomous Tradeline Builder
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-extrabold text-lux-primary">
+                      Corporate Credit Matrix &amp; Paydex Architecture
+                    </h2>
+                    <p className="text-xs text-lux-secondary max-w-2xl leading-relaxed">
+                      Build corporate credit profiles with verified Net 30, Revolving, and Commercial Bank facilities across D&amp;B, Experian Commercial, and Equifax Business.
+                    </p>
+                  </div>
+
+                  {/* Actions: Link Tradeline & Simulate Cycle */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={() => setShowLinkTradelineModal(true)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all shadow-sm"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Link Tradeline</span>
+                    </button>
+
+                    <button
+                      onClick={simulateCycle}
+                      disabled={simulatingCycle}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-gold bg-lux-gold/15 hover:bg-lux-gold hover:text-canvas-base text-lux-gold text-xs font-bold shadow-lux-sm transition-all disabled:opacity-50"
+                    >
+                      {simulatingCycle ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FastForward className="w-3.5 h-3.5 fill-current" />}
+                      <span>{simulatingCycle ? 'Simulating Early Payments...' : 'Simulate 30-Day Paydex Cycle'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Live Corporate Metrics Cards */}
+                <div className="mt-6 pt-6 border-t border-border-hairline grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+                  <div className="text-center p-3.5 rounded-xl bg-surface-elevated/80 border border-slate-800">
+                    <div className="text-2xl font-black text-amber-400">
+                      {truebuildData?.metrics?.paydexScore ?? '—'}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">D&amp;B Paydex Score</div>
+                    <span className="text-[9px] text-slate-500 font-medium block mt-1">Target: 80+ (Early Payments)</span>
+                  </div>
+
+                  <div className="text-center p-3.5 rounded-xl bg-surface-elevated/80 border border-slate-800">
+                    <div className="text-2xl font-black text-blue-400">
+                      {truebuildData?.metrics?.experianIntelliscore ?? '—'}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Experian Intelliscore</div>
+                    <span className="text-[9px] text-slate-500 font-medium block mt-1">Commercial Risk Model</span>
+                  </div>
+
+                  <div className="text-center p-3.5 rounded-xl bg-surface-elevated/80 border border-slate-800">
+                    <div className="text-2xl font-black text-violet-400">
+                      {truebuildData?.metrics?.equifaxCommercial ?? '—'}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Equifax Commercial</div>
+                    <span className="text-[9px] text-slate-500 font-medium block mt-1">Small Business Exchange</span>
+                  </div>
+
+                  <div className="text-center p-3.5 rounded-xl bg-lux-gold/10 border border-border-gold">
+                    <div className="text-2xl font-black text-lux-gold">
+                      ${(truebuildData?.metrics?.totalCreditLimit ?? 0).toLocaleString()}
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-lux-gold mt-0.5">Approved Commercial Lines</div>
+                    <span className="text-[9px] text-lux-secondary font-medium block mt-1">Tier {truebuildData?.metrics?.unlockedTier ?? 1} Unlocked</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tier Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tier Progression:</span>
+                  {[
+                    { id: 0, label: 'All Vendors' },
+                    { id: 1, label: 'Tier 1 (Net 30 Starter)' },
+                    { id: 2, label: 'Tier 2 (Fleet & Retail)' },
+                    { id: 3, label: 'Tier 3 (Revolving Business)' },
+                    { id: 4, label: 'Tier 4 (Commercial Bank Cards)' },
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => setTierFilter(t.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        tierFilter === t.id
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-xs text-slate-400 font-medium">
+                  {truebuildData?.vendors?.filter(v => tierFilter === 0 || v.tier === tierFilter).length ?? 0} Available Facilities
+                </div>
+              </div>
+
+              {/* Vendor Matrix Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(truebuildData?.vendors || TRUEBUILD_DEFAULT_VENDORS)
+                  .filter(v => tierFilter === 0 || v.tier === tierFilter)
+                  .map(v => {
+                    const isLocked = v.locked ?? false;
+                    const isApplied = v.applied ?? false;
+                    return (
+                      <div
+                        key={v.id}
+                        className={`relative rounded-2xl border p-5 flex flex-col justify-between transition-all duration-300 ${
+                          isApplied
+                            ? 'bg-emerald-950/20 border-emerald-500/40'
+                            : isLocked
+                              ? 'bg-surface-subtle/50 border-slate-800/60 opacity-60'
+                              : 'bg-surface-subtle/80 border-border-hairline hover:border-border-gold'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800">
+                              Tier {v.tier} Facility
+                            </span>
+                            {isApplied ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                <CheckCircle2 className="w-3 h-3" /> Reporting
+                              </span>
+                            ) : isLocked ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-slate-500 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">
+                                <Lock className="w-3 h-3" /> Locked
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                                <Unlock className="w-3 h-3" /> Ready
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-base font-extrabold text-white mt-1">{v.name}</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">{v.category} · {v.terms}</p>
+
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {v.reportsTo.split(',').map(r => (
+                              <span key={r.trim()} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-[10px] font-semibold text-slate-300">
+                                {r.trim()}
+                              </span>
+                            ))}
+                            {v.pgRequired ? (
+                              <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] font-bold text-amber-300">
+                                PG Required
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-bold text-emerald-300">
+                                No PG
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-slate-400 mt-3 bg-slate-950/60 p-2.5 rounded-xl border border-slate-900 leading-relaxed">
+                            💡 <span className="font-semibold text-slate-300">Underwriting:</span> {v.underwritingTips}
+                          </p>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-400 font-semibold">Min: ${v.minInvoice}</span>
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={v.applicationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all"
+                            >
+                              <span>Apply</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                            <button
+                              onClick={() => {
+                                setLinkVendorId(v.id);
+                                setShowLinkTradelineModal(true);
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white text-xs font-semibold transition-all"
+                            >
+                              <span>Link</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {/* Verified Commercial Invoices & Proof of Payment */}
+              <div className="glass-card rounded-2xl p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white">Commercial Trade Payment Ledger</h3>
+                    <p className="text-slate-400 text-xs mt-0.5">Electronically verified invoice settlements powering D&amp;B Paydex early payment indices.</p>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30">
+                    {truebuildData?.profile?.paymentRecords?.length ?? 0} Verified Payments
+                  </span>
+                </div>
+
+                {(truebuildData?.profile?.paymentRecords?.length ?? 0) === 0 ? (
+                  <div className="text-center py-8 text-slate-500">
+                    <p className="text-xs">No commercial payment records yet. Click &quot;Simulate 30-Day Paydex Cycle&quot; to generate early payment settlements.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-60 overflow-y-auto scrollbar-thin">
+                    {truebuildData!.profile!.paymentRecords.map(pmt => (
+                      <div key={pmt.id} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-xs font-bold text-white">{pmt.vendorName} · {pmt.invoiceNumber}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">Paid {pmt.paidDate} ({Math.abs(pmt.daysRelativeToDue)} days early)</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs font-extrabold text-emerald-400">${pmt.invoiceAmount.toFixed(2)}</div>
+                          <span className="text-[9px] font-bold uppercase text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                            +Paydex Boost
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1287,6 +1601,88 @@ export function ClientDetail({ clientId, navigate }: Props) {
                   >
                     {savingBizProfile ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                     <span>{savingBizProfile ? 'Saving & Auditing...' : 'Save & Execute 5 Audits'}</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Link Tradeline Modal */}
+      <AnimatePresence>
+        {showLinkTradelineModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-md bg-surface-subtle border border-slate-700 rounded-2xl shadow-2xl overflow-hidden p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-indigo-400" />
+                  <h3 className="text-sm font-extrabold text-white">Link Commercial Tradeline</h3>
+                </div>
+                <button onClick={() => setShowLinkTradelineModal(false)} className="text-slate-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={submitLinkTradeline} className="space-y-4">
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Target Vendor Facility</label>
+                  <select
+                    value={linkVendorId}
+                    onChange={e => setLinkVendorId(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  >
+                    {TRUEBUILD_DEFAULT_VENDORS.map(v => (
+                      <option key={v.id} value={v.id}>
+                        Tier {v.tier} – {v.name} ({v.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Account Number / Customer ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={linkAccountNumber}
+                    onChange={e => setLinkAccountNumber(e.target.value)}
+                    placeholder="e.g. UL-849201"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Approved Credit Limit ($)</label>
+                  <input
+                    type="number"
+                    required
+                    min={100}
+                    step={100}
+                    value={linkCreditLimit}
+                    onChange={e => setLinkCreditLimit(Number(e.target.value))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                  />
+                </div>
+
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkTradelineModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30"
+                  >
+                    Link Tradeline
                   </button>
                 </div>
               </form>
