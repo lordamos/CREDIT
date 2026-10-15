@@ -99,6 +99,19 @@ export interface DisputeLetter {
   deadline?: string; // 30-day FCRA deadline
   createdAt: string;
   sentAt?: string;
+  // LetterStream Dispatch Fields
+  letterstreamJobId?: string;
+  trackingNumber?: string;
+  certifiedMailStatus?: string;
+  mailingCost?: number;
+  deliveryType?: 'CERTIFIED_ERR' | 'CERTIFIED_RR' | 'FIRST_CLASS';
+  recipientAddress?: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
 }
 
 export type EmailStage =
@@ -366,6 +379,10 @@ export interface ProviderSettings {
   mailjetSecretKey: string;
   fromEmail: string;
   fromName: string;
+  // LetterStream API Integration
+  letterstreamApiKey?: string;
+  letterstreamApiSecret?: string;
+  letterstreamSandbox?: boolean;
 }
 
 export interface DataStore {

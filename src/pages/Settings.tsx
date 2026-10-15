@@ -197,6 +197,84 @@ export function Settings() {
             </div>
           </div>
 
+          {/* LetterStream Printing & Mailing API Card */}
+          <div className="rounded-2xl p-6 space-y-4 bg-surface-subtle/90 backdrop-blur-lux border border-white/[0.08] shadow-lux-md lux-bevel">
+            <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-lux-gold" />
+                <h2 className="text-xs font-bold uppercase tracking-wider text-white">
+                  LetterStream Automated Printing & Certified Mailing API
+                </h2>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-lux-gold border border-border-gold">
+                USPS Certified Mail + ERR
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Automate physical printing, stuffing, and certified mailing of 100% customized dispute letters directly to Equifax, Experian, and TransUnion with electronic return receipt (ERR) tracking numbers.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>LetterStream API Key</label>
+                <input
+                  className={inputCls}
+                  value={settings.letterstreamApiKey || ''}
+                  onChange={set('letterstreamApiKey')}
+                  placeholder="e.g. ls_live_key_..."
+                />
+              </div>
+              <div>
+                <label className={labelCls}>LetterStream API Secret</label>
+                <input
+                  type="password"
+                  className={inputCls}
+                  value={settings.letterstreamApiSecret || ''}
+                  onChange={set('letterstreamApiSecret')}
+                  placeholder="***masked***"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.letterstreamSandbox !== false}
+                  onChange={e =>
+                    setSettings(s => (s ? { ...s, letterstreamSandbox: e.target.checked } : s))
+                  }
+                  className="rounded border-slate-700 bg-slate-900 text-lux-gold focus:ring-lux-gold"
+                />
+                <span className="text-xs text-slate-300">
+                  Enable Sandbox Mode (Simulated USPS CASS certified dispatch)
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setTestingPing(true);
+                  try {
+                    const res = await fetch(`${API}/settings/test-letterstream`, { method: 'POST' });
+                    const j = await res.json();
+                    alert(j.message);
+                  } catch (e: any) {
+                    alert('LetterStream connection test failed: ' + e.message);
+                  } finally {
+                    setTestingPing(false);
+                  }
+                }}
+                disabled={testingPing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border-gold bg-lux-gold/10 text-xs font-semibold text-lux-gold hover:bg-lux-gold hover:text-canvas-base transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
+                Test LetterStream Connection
+              </button>
+            </div>
+          </div>
+
           {/* Save Button */}
           <motion.button 
             whileHover={{ scale: 1.01 }}

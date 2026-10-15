@@ -1,6 +1,6 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { getAllClients, getClientById, saveClient, deleteClient, getClientByToken } from '../core/dataStore.js';
+import { getAllClients, getClientById, saveClient, deleteClient, getClientByToken, getSettings } from '../core/dataStore.js';
 import { dispatchEmail, getClientsNeedingOverdueAlert, getClientsNeedingPostCare } from '../core/emailScheduler.js';
 import { runAllAgents, runAllBusinessAudits, runAgent } from '../core/agentRunner.js';
 import { parseReport } from '../core/reportParser.js';
@@ -21,6 +21,8 @@ import {
   generateIntentToSueLetter,
   BUREAU_ADDRESSES
 } from '../core/fcraEngine.js';
+import { generateClientCustomDisputeLetters } from '../core/letterCustomizer.js';
+import { sendLetterThroughLetterStream } from '../core/letterstream.js';
 
 export const clientRouter = express.Router();
 
@@ -748,5 +750,159 @@ clientRouter.post('/:id/fcra-session/generate-intent-to-sue', (req, res) => {
 
   res.json({ success: true, data: { draft, session: client.fcraSession } });
 });
+
+// ============================================================
+// FULLY CUSTOMIZED DISPUTE LETTERS & LETTERSTREAM DISPATCH
+// ============================================================
+
+// POST /api/clients/:id/generate-custom-disputes
+clientRouter.post('/:id/generate-custom-disputes', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { tone, personalContext, targetBureaus } = req.body;
+  const newLetters = generateClientCustomDisputeLetters(client, client.creditProfile, {
+    tone,
+    personalContext,
+    targetBureaus
+  });
+
+  if (newLetters.length > 0) {
+    // Replace or merge with existing disputes
+    const existingOther = client.disputes.filter(d => !newLetters.some(nl => nl.bureau === d.bureau));
+    client.disputes = [...existingOther, ...newLetters];
+
+    // Also sync to agentOutputs['DISPUTE_LETTER']
+    if (client.agentOutputs['DISPUTE_LETTER']) {
+      client.agentOutputs['DISPUTE_LETTER'].letters = client.disputes;
+    }
+    client.updatedAt = new Date().toISOString();
+    saveClient(client);
+  }
+
+  res.json({
+    success: true,
+    data: {
+      letters: client.disputes,
+      generatedCount: newLetters.length,
+      client
+    }
+  });
+});
+
+// POST /api/clients/:id/letterstream/send
+clientRouter.post('/:id/letterstream/send', async (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const { letterId, deliveryType = 'CERTIFIED_ERR' } = req.body;
+  const settings = getSettings();
+
+  // Determine which letters to dispatch
+  let targetLetters: typeof client.disputes = [];
+  if (letterId === 'ALL') {
+    targetLetters = client.disputes.filter(l => l.status !== 'SENT');
+    if (targetLetters.length === 0) {
+      targetLetters = client.disputes; // resend if all were sent
+    }
+  } else {
+    const found = client.disputes.find(l => l.id === letterId);
+    if (!found) return res.status(404).json({ success: false, error: 'Dispute letter not found' });
+    targetLetters = [found];
+  }
+
+  const results = [];
+
+  for (const letter of targetLetters) {
+    const bureau = letter.bureau || 'Experian';
+    try {
+      const jobResult = await sendLetterThroughLetterStream({
+        client,
+        letter,
+        bureau,
+        settings,
+        deliveryType
+      });
+
+      // Update Letter status & tracking
+      letter.status = 'SENT';
+      letter.sentAt = new Date().toISOString();
+      letter.letterstreamJobId = jobResult.jobId;
+      letter.trackingNumber = jobResult.trackingNumber;
+      letter.certifiedMailStatus = jobResult.status;
+      letter.mailingCost = jobResult.cost;
+      letter.deliveryType = deliveryType;
+
+      // 1. Automatically register into FCRA Evidence Vault (Step 4)
+      if (!client.fcraSession) {
+        client.fcraSession = initializeFcraSession(client);
+      }
+
+      client.fcraSession.evidenceFiles.push({
+        id: uuidv4(),
+        title: `LetterStream Certified Mail Dispatch (${bureau})`,
+        type: 'CERTIFIED_MAIL_RECEIPT',
+        bureau,
+        trackingNumber: jobResult.trackingNumber,
+        dateSentOrDelivered: new Date().toISOString().split('T')[0],
+        fileNotes: `Job ${jobResult.jobId} · USPS Certified Mail with ERR · Delivery to ${bureau}`,
+        verified: true,
+        createdAt: new Date().toISOString()
+      });
+
+      // 2. Automatically initialize or update 30-Day Statutory Clock (Step 3)
+      const existingDeadIdx = client.fcraSession.investigationDeadlines.findIndex(d => d.bureau === bureau);
+      const estDelivery = jobResult.estimatedDeliveryDate;
+      const d30 = new Date(estDelivery);
+      d30.setDate(d30.getDate() + 30);
+
+      const deadlineEntry = {
+        bureau,
+        trackingNumber: jobResult.trackingNumber,
+        deliveredDate: estDelivery,
+        day30Deadline: d30.toISOString().split('T')[0],
+        status: 'UNDER_INVESTIGATION' as const,
+        outcomeNotes: `Dispatched via LetterStream (Job ${jobResult.jobId}). 30-day investigation clock active.`
+      };
+
+      if (existingDeadIdx >= 0) {
+        client.fcraSession.investigationDeadlines[existingDeadIdx] = deadlineEntry;
+      } else {
+        client.fcraSession.investigationDeadlines.push(deadlineEntry);
+      }
+
+      if (!client.fcraSession.completedSteps.includes(2)) client.fcraSession.completedSteps.push(2);
+      if (!client.fcraSession.completedSteps.includes(3)) client.fcraSession.completedSteps.push(3);
+      if (!client.fcraSession.completedSteps.includes(4)) client.fcraSession.completedSteps.push(4);
+
+      results.push(jobResult);
+    } catch (err: any) {
+      console.error(`Failed to send letter to ${bureau}:`, err.message);
+      results.push({
+        success: false,
+        bureau,
+        error: err.message
+      });
+    }
+  }
+
+  // Set client stage to DISPUTE_ACTIVE if in earlier stage
+  if (['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID'].includes(client.stage)) {
+    client.stage = 'DISPUTE_ACTIVE';
+  }
+
+  client.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({
+    success: true,
+    data: {
+      dispatched: results.length,
+      results,
+      client
+    }
+  });
+});
+
 
 

@@ -21,7 +21,12 @@ import {
   Send,
   Calendar,
   Check,
-  Info
+  Info,
+  Sparkles,
+  Truck,
+  Barcode,
+  Sliders,
+  ShieldCheck
 } from 'lucide-react';
 import type {
   Client,
@@ -45,6 +50,19 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
   const [selectedBureau, setSelectedBureau] = useState<'Equifax' | 'Experian' | 'TransUnion'>('Experian');
   const [selectedAccountIdx, setSelectedAccountIdx] = useState<number>(0);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Step 2 Customizer & LetterStream state
+  const [customTone, setCustomTone] = useState<
+    'FORENSIC_AUDITOR' | 'ASSERTIVE_CONSUMER' | 'PROCEDURAL_COMPLIANCE' | 'COMMERCIAL_IMPAIRMENT'
+  >('FORENSIC_AUDITOR');
+  const [personalContext, setPersonalContext] = useState<string>('');
+  const [regeneratingLetters, setRegeneratingLetters] = useState(false);
+  const [dispatchingLetterStream, setDispatchingLetterStream] = useState(false);
+  const [dispatchResult, setDispatchResult] = useState<{
+    success: boolean;
+    message: string;
+    trackingNumbers?: string[];
+  } | null>(null);
 
   // Step 3 Delivery Date state
   const [inputDeliveryDate, setInputDeliveryDate] = useState<string>('');
@@ -94,6 +112,90 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
     navigator.clipboard.writeText(text);
     setCopiedText(label);
     setTimeout(() => setCopiedText(null), 2500);
+  };
+
+  const handleRegenerateLetters = async () => {
+    setRegeneratingLetters(true);
+    setDispatchResult(null);
+    try {
+      const res = await fetch(`${API}/clients/${client.id}/generate-custom-disputes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tone: customTone,
+          personalContext: personalContext.trim() || undefined,
+          targetBureaus: ['Equifax', 'Experian', 'TransUnion']
+        })
+      });
+      const json = await res.json();
+      if (json.success && json.data.client) {
+        onUpdate(json.data.client);
+        if (json.data.client.fcraSession) {
+          setSession(json.data.client.fcraSession);
+        }
+        setDispatchResult({
+          success: true,
+          message: `Generated ${json.data.generatedCount} 100% customized dispute letters under the ${customTone.replace(/_/g, ' ')} persona with unique e-OSCAR OCR evasion hashes.`
+        });
+      } else {
+        setDispatchResult({
+          success: false,
+          message: json.error || 'Failed to generate customized letters.'
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      setDispatchResult({
+        success: false,
+        message: e.message || 'Network error while generating customized letters.'
+      });
+    } finally {
+      setRegeneratingLetters(false);
+    }
+  };
+
+  const handleDispatchLetterStream = async (targetLetterId: string | 'ALL') => {
+    setDispatchingLetterStream(true);
+    setDispatchResult(null);
+    try {
+      const res = await fetch(`${API}/clients/${client.id}/letterstream/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          letterId: targetLetterId,
+          deliveryType: 'CERTIFIED_ERR'
+        })
+      });
+      const json = await res.json();
+      if (json.success && json.data.client) {
+        onUpdate(json.data.client);
+        if (json.data.client.fcraSession) {
+          setSession(json.data.client.fcraSession);
+        }
+        const trackings = json.data.results
+          ?.filter((r: any) => r.trackingNumber)
+          .map((r: any) => `${r.bureau}: ${r.trackingNumber}`);
+
+        setDispatchResult({
+          success: true,
+          message: `Dispatched ${json.data.dispatched} letter(s) via LetterStream USPS Certified Mail (ERR). Registered in Step 4 Evidence Vault & activated Step 3 30-day statutory clock!`,
+          trackingNumbers: trackings
+        });
+      } else {
+        setDispatchResult({
+          success: false,
+          message: json.error || 'LetterStream dispatch encountered an error.'
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      setDispatchResult({
+        success: false,
+        message: e.message || 'Network communication error with LetterStream API.'
+      });
+    } finally {
+      setDispatchingLetterStream(false);
+    }
   };
 
   const handleStepChange = async (step: 1 | 2 | 3 | 4 | 5) => {
@@ -569,11 +671,233 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
                 <p className="text-xs text-red-200/80 mt-1 leading-relaxed">
                   Credit reporting agencies use automated optical character recognition (OCR) and computer scanners to detect form templates, standardized internet dispute letters, and raw ChatGPT outputs. When detected, they trigger automated "frivolous" dismissals under 15 U.S.C. § 1681i(a)(3).
                   <br />
-                  <strong>Our Engine:</strong> Generates personalized, factual, consumer-voice disputes citing specific cross-bureau metric contradictions that mandate human verification.
+                  <strong>Our Engine:</strong> Generates 100% personalized, consumer-voice disputes citing specific cross-bureau metric contradictions that mandate human verification.
                 </p>
               </div>
             </div>
           </div>
+
+          {/* Linguistic Customization & Tone Synthesizer Card */}
+          <div className="rounded-2xl border border-border-hairline bg-surface-subtle/80 p-6 shadow-lux-md space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-lux-gold animate-pulse" />
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-lux-gold" />
+                    Linguistic Customization & Anti-OCR Voice Synthesizer
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Select an authentic legal persona and inject client-specific financial impairment details to permanently bypass e-OSCAR keyword matching.
+                </p>
+              </div>
+              <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 w-fit">
+                <ShieldCheck className="w-3 h-3" />
+                Anti-e-OSCAR Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+              {/* Persona Tone Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-300">
+                  Dispute Persona & Drafting Voice
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'FORENSIC_AUDITOR', name: 'Forensic Auditor', desc: 'Strict statutory cross-exam & CFR analysis' },
+                    { id: 'ASSERTIVE_CONSUMER', name: 'Assertive Consumer', desc: 'Direct consumer narrative & mandate' },
+                    { id: 'PROCEDURAL_COMPLIANCE', name: 'Procedural Compliance', desc: '15-field metric contradiction focus' },
+                    { id: 'COMMERCIAL_IMPAIRMENT', name: 'Commercial Impairment', desc: 'Business loan denial & damages clause' }
+                  ].map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setCustomTone(t.id as any)}
+                      className={`text-left p-3 rounded-xl border text-xs transition-all ${
+                        customTone === t.id
+                          ? 'border-lux-gold bg-lux-gold/10 text-white shadow-lux-sm'
+                          : 'border-slate-800 bg-slate-950/60 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="font-semibold text-slate-200 flex items-center justify-between">
+                        {t.name}
+                        {customTone === t.id && <Check className="w-3.5 h-3.5 text-lux-gold" />}
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1 leading-snug">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Personal Impact Context */}
+              <div className="space-y-2 flex flex-col justify-between">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                    <span>Personal Financial Impairment Context</span>
+                    <span className="text-[10px] text-slate-500 font-normal">Optional § 1681n damages evidence</span>
+                  </label>
+                  <textarea
+                    value={personalContext}
+                    onChange={e => setPersonalContext(e.target.value)}
+                    rows={3}
+                    placeholder="e.g., Denied $120,000 commercial equipment line of credit due to cross-bureau discrepancies; received adverse action notice with 14.8% rate penalty..."
+                    className="w-full mt-1.5 rounded-xl border border-slate-800 bg-slate-950/80 p-3 text-xs text-white placeholder-slate-600 focus:border-lux-gold focus:outline-none resize-none"
+                  />
+                </div>
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleRegenerateLetters}
+                    disabled={regeneratingLetters}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border-gold bg-lux-gold text-canvas-base text-xs font-bold shadow-lux-sm hover:brightness-110 disabled:opacity-50 transition-all"
+                  >
+                    {regeneratingLetters ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    {regeneratingLetters ? 'Synthesizing Letters...' : 'Regenerate 100% Customized Letters'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* LetterStream Dispatch & Automation Bar */}
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/10 p-6 shadow-lux-md space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-sm font-bold text-white">
+                    LetterStream USPS Certified Mail Dispatch Automation
+                  </h4>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Physical CASS-certified printing, barcode generation, and USPS Certified Mail with Electronic Return Receipt (ERR).
+                </p>
+              </div>
+
+              {/* Batch send all 3 */}
+              <button
+                type="button"
+                onClick={() => handleDispatchLetterStream('ALL')}
+                disabled={dispatchingLetterStream}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-emerald-500/50 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all disabled:opacity-50"
+              >
+                {dispatchingLetterStream ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                Register & Dispatch All 3 via LetterStream
+              </button>
+            </div>
+
+            {/* Current Selected Bureau Dispatch Status */}
+            {(() => {
+              const currentLetter = client.disputes.find(l => l.bureau === selectedBureau);
+              const isSent = currentLetter?.status === 'SENT';
+
+              return (
+                <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      isSent ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                    }`}>
+                      {isSent ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">
+                          {selectedBureau} Dispute Letter
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          isSent
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        }`}>
+                          {isSent ? 'DISPATCHED VIA LETTERSTREAM' : 'READY FOR CERTIFIED MAILING'}
+                        </span>
+                      </div>
+                      {isSent ? (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-400">
+                          <span className="font-mono text-emerald-300 flex items-center gap-1">
+                            <Barcode className="w-3 h-3 text-emerald-400" />
+                            USPS Tracking: {currentLetter?.trackingNumber}
+                          </span>
+                          <span>•</span>
+                          <span>Job ID: {currentLetter?.letterstreamJobId}</span>
+                          <span>•</span>
+                          <span>Cost: ${currentLetter?.mailingCost?.toFixed(2) || '7.85'}</span>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Will be printed on 24lb bond paper, barcoded, and sent via USPS Certified Mail with Electronic Return Receipt.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {currentLetter && (
+                      <button
+                        type="button"
+                        onClick={() => handleDispatchLetterStream(currentLetter.id)}
+                        disabled={dispatchingLetterStream}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition-all disabled:opacity-50 ${
+                          isSent
+                            ? 'border-slate-700 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-600'
+                            : 'border-border-gold bg-lux-gold/15 text-lux-gold hover:bg-lux-gold hover:text-canvas-base'
+                        }`}
+                      >
+                        {dispatchingLetterStream ? (
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Send className="w-3 h-3" />
+                        )}
+                        {isSent ? 'Re-Dispatch via LetterStream' : `Send to ${selectedBureau} via LetterStream`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Dispatch Result Notification */}
+          {dispatchResult && (
+            <div className={`p-4 rounded-xl border ${
+              dispatchResult.success
+                ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-200'
+                : 'border-red-500/30 bg-red-950/20 text-red-200'
+            }`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold">{dispatchResult.message}</p>
+                  {dispatchResult.trackingNumbers && dispatchResult.trackingNumbers.length > 0 && (
+                    <div className="space-y-0.5 pt-1">
+                      {dispatchResult.trackingNumbers.map((t, idx) => (
+                        <div key={idx} className="font-mono text-[11px] text-emerald-300 flex items-center gap-2">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                          {t}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDispatchResult(null)}
+                  className="text-xs opacity-60 hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Bureau Picker & Actions */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-surface-subtle/80 border border-border-hairline">
@@ -598,6 +922,7 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={() => {
                   const letter = client.disputes.find(l => l.bureau === selectedBureau);
                   if (letter) copyToClipboard(letter.content, 'letter');
@@ -608,6 +933,7 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
                 {copiedText === 'letter' ? 'Copied!' : 'Copy Letter'}
               </button>
               <button
+                type="button"
                 onClick={() => handleStepChange(3)}
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl border border-border-gold bg-lux-gold/10 text-xs font-semibold text-lux-gold hover:bg-lux-gold hover:text-canvas-base transition-colors"
               >
@@ -624,7 +950,7 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
               return (
                 <div className="p-8 text-center rounded-2xl border border-dashed border-slate-800 bg-slate-950/40">
                   <p className="text-xs text-slate-400">
-                    No generated dispute letter found for {selectedBureau}. Run the Auto Repair engine or AI Agents to generate letters.
+                    No generated dispute letter found for {selectedBureau}. Click "Regenerate 100% Customized Letters" above to synthesize customized letters.
                   </p>
                 </div>
               );
@@ -640,9 +966,16 @@ export function FcraWalkthroughEngine({ client, onUpdate }: Props) {
                       Includes 15 U.S.C. § 1681i, § 1681e(b), § 1681n, § 1681o, and Debt Placement vs. Ownership Notice.
                     </p>
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-lux-gold/10 text-lux-gold border border-border-gold">
-                    Certified Mail Format
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {letter.trackingNumber && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        USPS {letter.trackingNumber}
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-lux-gold/10 text-lux-gold border border-border-gold">
+                      Certified Mail Format
+                    </span>
+                  </div>
                 </div>
 
                 <pre className="font-mono text-xs text-slate-300 whitespace-pre-wrap bg-slate-950/80 p-6 rounded-xl border border-slate-800 max-h-[500px] overflow-y-auto leading-relaxed">
