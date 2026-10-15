@@ -1,20 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import type { Client, AgentId, PipelineStage, EmailStage } from '../types/credit';
+import type { Client, AgentId, PipelineStage, EmailStage, BusinessProfile, AddressType, ReadinessVerdict } from '../types/credit';
 import { PIPELINE_STAGES, AGENT_META, EMAIL_STAGE_META } from '../types/credit';
 import type { Page } from '../App';
 import { AutoRepairEngine } from '../components/AutoRepairEngine';
+import { 
+  ArrowLeft, 
+  Bot, 
+  FileText, 
+  Mail, 
+  Scale, 
+  Wrench, 
+  Sparkles, 
+  CheckCircle2, 
+  Clock, 
+  Printer, 
+  Copy, 
+  ChevronRight, 
+  ShieldCheck, 
+  DollarSign, 
+  Layers, 
+  Send, 
+  RefreshCw,
+  TrendingUp,
+  AlertCircle,
+  FileCheck2,
+  Check,
+  Building2,
+  AlertTriangle,
+  XCircle,
+  Sliders,
+  Play,
+  Award,
+  X
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const API = 'http://localhost:3002/api';
 
 const STAGE_ORDER: PipelineStage[] = ['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID', 'DISPUTE_ACTIVE', 'POST_CARE'];
 const AGENT_ORDER: AgentId[] = ['COMPREHENSIVE_AUDIT', 'ROADMAP_90_DAY', 'DEBT_OPTIMIZER', 'DISPUTE_LETTER', 'GOODWILL_LETTER', 'INQUIRY_MINIMIZER', 'SECONDARY_FREEZE', 'CREDIT_GROWTH'];
+export const BIZ_AGENT_ORDER: AgentId[] = ['BIZ_FORMATION_EIN', 'BIZ_ADDRESS_FOOTPRINT', 'BIZ_NAICS_CLASSIFICATION', 'BIZ_COMMINGLING_FINANCES', 'BIZ_FUNDING_READINESS'];
 const EMAIL_STAGES: EmailStage[] = ['WELCOME', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'PAYMENT_CONFIRMED', 'OVERDUE_48H', 'POST_CARE_45DAY'];
 
 interface Props { clientId: string; navigate: (p: Page) => void; }
 
-type Tab = 'overview' | 'repair' | 'agents' | 'emails' | 'disputes' | 'agreement';
+type Tab = 'overview' | 'repair' | 'agents' | 'business-audit' | 'emails' | 'disputes' | 'agreement';
 
-// Simple markdown → HTML renderer (headings, bold, italic, code, tables, lists, hr)
 function renderMarkdown(text: string): string {
   return text
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -34,9 +65,8 @@ function renderMarkdown(text: string): string {
     });
 }
 
-// Agreement HTML
 function buildAgreement(client: Client): string {
-  const today = new Date().toLocaleDateString('en-US', { weekday: undefined, year: 'numeric', month: 'long', day: 'numeric' });
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const planA = client.plan === 'A';
   return `
     <div style="font-family: Georgia, serif; max-width:740px; margin:0 auto; padding:40px; color:#1a1a2e; line-height:1.7; background:#fff;">
@@ -53,38 +83,34 @@ function buildAgreement(client: Client): string {
       <h2 style="font-size:16px; color:#1d4ed8;">2. FEE STRUCTURE (SELECTED PLAN)</h2>
       ${planA
     ? `<div style="background:#f0f7ff;border-left:4px solid #1d4ed8;padding:16px;border-radius:4px;">
-           <strong>✅ OPTION A – STANDARD PLAN</strong><br>
+           <strong>OPTION A – STANDARD PLAN</strong><br>
            Upfront Retainer: <strong>$250.00 USD</strong> (non-refundable, due upon signing)<br>
            Success Fee: <strong>$1,000.00 USD</strong> upon first credit approval<br>
            <strong>Total: $1,250.00 USD</strong>
          </div>`
     : `<div style="background:#f5f0ff;border-left:4px solid #7c3aed;padding:16px;border-radius:4px;">
-           <strong>✅ OPTION B – DEFERRED PLAN</strong><br>
+           <strong>OPTION B – DEFERRED PLAN</strong><br>
            Upfront Retainer: <strong>$0.00 USD</strong><br>
-           Success Fee: <strong>$1,500.00 USD</strong> ($1,000 base + $500 deferred surcharge) upon first credit approval<br>
+           Success Fee: <strong>$1,500.00 USD</strong> upon first credit approval<br>
            <strong>Total: $1,500.00 USD</strong>
          </div>`}
       <h2 style="font-size:16px; color:#1d4ed8; margin-top:24px;">3. PAYMENT TERMS</h2>
-      <p>Success Fee becomes due immediately upon receipt of credit approval notification and must be remitted within <strong>three (3) business days</strong> of card activation via ACH, wire transfer, or certified bank draft. Unpaid balances accrue interest under Florida Statutes Chapter 687. Non-payment authorizes Provider to request immediate account suspension with the issuing institution.</p>
-      <h2 style="font-size:16px; color:#1d4ed8;">4. CLIENT RESPONSIBILITY & INDEMNIFICATION</h2>
-      <p>Client assumes <strong>100% sole liability</strong> for all balances, charges, interest, and fees on any account. Client agrees to indemnify, defend, and hold harmless Provider from all claims, losses, and attorney's fees arising from Client's use of secured credit facilities.</p>
-      <h2 style="font-size:16px; color:#1d4ed8;">5. AUTOMATED COMMUNICATIONS CONSENT</h2>
-      <p>Client expressly consents to receive automated electronic status updates, approval alerts, invoice notices, and compliance notifications via email and SMS at contact information provided during onboarding.</p>
-      <h2 style="font-size:16px; color:#1d4ed8;">6. GOVERNING LAW & JURISDICTION</h2>
-      <p>This Agreement is governed by the laws of the <strong>State of Florida</strong>. All disputes shall be resolved exclusively in <strong>Brevard County, Florida</strong>, or through binding AAA arbitration in Brevard County. Prevailing party is entitled to full legal fee recovery.</p>
+      <p>Success Fee becomes due immediately upon receipt of credit approval notification and must be remitted within three business days.</p>
+      <h2 style="font-size:16px; color:#1d4ed8;">4. JURISDICTION & GOVERNING LAW</h2>
+      <p>This Agreement is governed by the laws of the State of Florida with exclusive venue in Brevard County, Florida.</p>
       <hr style="border:none;border-top:1px solid #ddd;margin:32px 0;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;">
         <div>
           <p><strong>PROVIDER / GUARANTOR:</strong></p>
           <p style="border-bottom:1px solid #333;padding-bottom:8px;margin-bottom:4px;">&nbsp;</p>
-          <p style="font-size:12px;color:#666;">Signature / Date</p>
+          <p style="font-size:12px;color:#666;">Authorized Officer</p>
           <p>Credit Acceleration Services<br>Palm Bay, FL 32905</p>
         </div>
         <div>
-          <p><strong>CLIENT / COMPANY REPRESENTATIVE:</strong></p>
+          <p><strong>CLIENT / GUARANTOR:</strong></p>
           <p style="border-bottom:1px solid #333;padding-bottom:8px;margin-bottom:4px;">&nbsp;</p>
           <p style="font-size:12px;color:#666;">Signature / Date</p>
-          <p>${client.firstName} ${client.lastName}<br>${client.companyName || ''}<br>${client.email}</p>
+          <p>${client.firstName} ${client.lastName}<br>${client.companyName || ''}</p>
         </div>
       </div>
     </div>`;
@@ -98,7 +124,12 @@ export function ClientDetail({ clientId, navigate }: Props) {
   const [advancingStage, setAdvancingStage] = useState(false);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<AgentId | null>(null);
-  const [selectedDispute, setSelectedDispute] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [runningBizAudit, setRunningBizAudit] = useState(false);
+  const [runningSingleBiz, setRunningSingleBiz] = useState<AgentId | null>(null);
+  const [showBizConfigModal, setShowBizConfigModal] = useState(false);
+  const [savingBizProfile, setSavingBizProfile] = useState(false);
+  const [bizFormData, setBizFormData] = useState<BusinessProfile>({});
 
   const load = async () => {
     setLoading(true);
@@ -106,6 +137,9 @@ export function ClientDetail({ clientId, navigate }: Props) {
       const res = await fetch(`${API}/clients/${clientId}`);
       const json = await res.json();
       setClient(json.data);
+      if (json.data?.businessProfile) {
+        setBizFormData(json.data.businessProfile);
+      }
     } finally { setLoading(false); }
   };
 
@@ -119,18 +153,77 @@ export function ClientDetail({ clientId, navigate }: Props) {
     setTab('agents');
   };
 
+  const runBusinessAudit = async (customProfile?: BusinessProfile) => {
+    setRunningBizAudit(true);
+    try {
+      await fetch(`${API}/clients/${clientId}/run-business-audit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(customProfile || client?.businessProfile || {})
+      });
+      await load();
+      setTab('business-audit');
+    } finally {
+      setRunningBizAudit(false);
+    }
+  };
+
+  const runSingleBizPrompt = async (agentId: AgentId) => {
+    setRunningSingleBiz(agentId);
+    try {
+      await fetch(`${API}/clients/${clientId}/run-agent/${agentId}`, {
+        method: 'POST'
+      });
+      await load();
+    } finally {
+      setRunningSingleBiz(null);
+    }
+  };
+
+  const saveBusinessProfileAndRerun = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBizProfile(true);
+    try {
+      await fetch(`${API}/clients/${clientId}/business-profile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bizFormData)
+      });
+      setShowBizConfigModal(false);
+      await runBusinessAudit(bizFormData);
+    } finally {
+      setSavingBizProfile(false);
+    }
+  };
+
   const advanceStage = async () => {
     setAdvancingStage(true);
-    await fetch(`${API}/clients/${clientId}/advance`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    await fetch(`${API}/clients/${clientId}/advance`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({}) 
+    });
     await load();
     setAdvancingStage(false);
   };
 
   const sendEmail = async (stage: EmailStage) => {
     setSendingEmail(stage);
-    await fetch(`${API}/clients/${clientId}/send-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage }) });
+    await fetch(`${API}/clients/${clientId}/send-email`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ stage }) 
+    });
     await load();
     setSendingEmail(null);
+  };
+
+  const copyIntakeLink = () => {
+    if (!client) return;
+    const url = `${window.location.origin}/#/intake/${client.intakeToken}`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const printAgreement = () => {
@@ -148,355 +241,1060 @@ export function ClientDetail({ clientId, navigate }: Props) {
     win.document.close();
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-slate-400">Loading...</div>;
-  if (!client) return <div className="flex items-center justify-center h-64 text-red-400">Client not found.</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-slate-400 gap-3">
+        <RefreshCw className="w-6 h-6 animate-spin text-indigo-500" />
+        <span className="text-xs font-semibold uppercase tracking-wider">Synchronizing client docket...</span>
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-rose-400 gap-3">
+        <AlertCircle className="w-8 h-8" />
+        <span className="text-sm font-bold">Client record not found.</span>
+        <button onClick={() => navigate({ name: 'dashboard' })} className="text-xs text-slate-400 underline mt-2">
+          Return to dashboard
+        </button>
+      </div>
+    );
+  }
 
   const currentStageIdx = STAGE_ORDER.indexOf(client.stage);
   const nextStage = STAGE_ORDER[currentStageIdx + 1];
-  const agentsDone = Object.keys(client.agentOutputs).length;
+  const agentsDone = AGENT_ORDER.filter(id => client.agentOutputs[id]?.status === 'COMPLETE').length;
+  const bizAuditsDone = BIZ_AGENT_ORDER.filter(id => client.agentOutputs[id]?.status === 'COMPLETE').length;
   const stageInfo = PIPELINE_STAGES[client.stage];
-  const intakeUrl = `${window.location.origin}/intake/${client.intakeToken}`;
+  const intakeUrl = `${window.location.origin}/#/intake/${client.intakeToken}`;
 
-  const tabCls = (t: Tab) => `px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-500 hover:text-white'}`;
+  const tabs: { id: Tab; label: string; icon: any; count?: number }[] = [
+    { id: 'overview', label: 'Overview', icon: FileText },
+    { id: 'repair', label: 'Auto Repair', icon: Wrench },
+    { id: 'business-audit', label: 'Commercial Audit (5 Prompts)', icon: Building2, count: bizAuditsDone },
+    { id: 'agents', label: 'AI Agents', icon: Bot, count: agentsDone },
+    { id: 'emails', label: 'Emails', icon: Mail, count: client.emailLog.length },
+    { id: 'disputes', label: 'Dispute Letters', icon: Scale, count: client.disputes.length },
+    { id: 'agreement', label: 'Legal Agreement', icon: FileCheck2 },
+  ];
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8">
+      
+      {/* Top Header & Breadcrumb */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 glass-panel p-6 rounded-2xl border border-slate-800/80">
         <div>
-          <button onClick={() => navigate({ name: 'dashboard' })} className="text-slate-500 hover:text-white text-sm mb-2 flex items-center gap-1">← Dashboard</button>
-          <h1 className="text-2xl font-bold text-white">{client.firstName} {client.lastName}</h1>
-          <p className="text-slate-400 text-sm">{client.companyName} · {client.email} · {client.phone}</p>
+          <button 
+            onClick={() => navigate({ name: 'dashboard' })} 
+            className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white text-xs font-semibold mb-3 transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Overseer Dashboard</span>
+          </button>
+          
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-extrabold tracking-tight text-white">
+              {client.firstName} {client.lastName}
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
+              Plan {client.plan}
+            </span>
+          </div>
+          <p className="text-slate-400 text-xs mt-1">
+            {client.companyName ? `${client.companyName} · ` : ''}{client.email} · {client.phone}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className={`text-sm font-semibold px-3 py-1.5 rounded-full ${
-            stageInfo.color === 'green' || stageInfo.color === 'emerald' ? 'bg-green-500/20 text-green-300' :
-            stageInfo.color === 'blue' ? 'bg-blue-500/20 text-blue-300' :
-            stageInfo.color === 'yellow' ? 'bg-yellow-500/20 text-yellow-300' :
-            stageInfo.color === 'red' ? 'bg-red-500/20 text-red-300' :
-            'bg-slate-700 text-slate-300'}`}>
-            {stageInfo.label}
-          </span>
+
+        {/* Stage Progression Action */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold text-white">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{stageInfo.label}</span>
+          </div>
+
           {nextStage && (
-            <button onClick={advanceStage} disabled={advancingStage}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-              {advancingStage ? '⏳' : '→'} {advancingStage ? 'Advancing...' : `Move to ${PIPELINE_STAGES[nextStage].label}`}
+            <button 
+              onClick={advanceStage} 
+              disabled={advancingStage}
+              className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {advancingStage ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span>{advancingStage ? 'Advancing...' : `Advance to ${PIPELINE_STAGES[nextStage].label}`}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Plan</div>
-          <div className="font-bold text-white">Option {client.plan}</div>
-          <div className="text-xs text-slate-500">${client.plan === 'A' ? '1,250' : '1,500'} total</div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Invoice</div>
-          <div className={`font-bold ${client.invoice?.status === 'PAID' ? 'text-green-400' : client.invoice?.status === 'OVERDUE' ? 'text-red-400' : 'text-yellow-400'}`}>
-            ${(client.invoice?.amount ?? 0).toLocaleString()} — {client.invoice?.status ?? 'N/A'}
+      {/* Quick Metrics Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="glass-card rounded-2xl p-4.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Plan Structure</span>
+            <Layers className="w-4 h-4 text-indigo-400" />
           </div>
+          <div className="text-xl font-extrabold text-white">Tier {client.plan}</div>
+          <div className="text-[11px] text-slate-500 mt-1">${client.plan === 'A' ? '1,250' : '1,500'} engagement value</div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Agents Run</div>
-          <div className="font-bold text-white">{agentsDone}/8</div>
-          <div className="text-xs text-slate-500">{client.disputes.length} letters generated</div>
+
+        <div className="glass-card rounded-2xl p-4.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Success Fee Status</span>
+            <DollarSign className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className={`text-xl font-extrabold ${client.invoice?.status === 'PAID' ? 'text-emerald-400' : client.invoice?.status === 'OVERDUE' ? 'text-rose-400' : 'text-amber-400'}`}>
+            ${(client.invoice?.amount ?? 0).toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1 uppercase font-semibold">{client.invoice?.status ?? 'Pending'}</div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-          <div className="text-xs text-slate-400">Emails Sent</div>
-          <div className="font-bold text-white">{client.emailLog.filter(e => e.status === 'SENT').length}</div>
-          <div className="text-xs text-slate-500">of {client.emailLog.length} total</div>
+
+        <div className="glass-card rounded-2xl p-4.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">AI Agents Executed</span>
+            <Bot className="w-4 h-4 text-violet-400" />
+          </div>
+          <div className="text-xl font-extrabold text-white">{agentsDone} / 8</div>
+          <div className="text-[11px] text-slate-500 mt-1">{client.disputes.length} legal letters drafted</div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-4.5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Email Dispatches</span>
+            <Mail className="w-4 h-4 text-blue-400" />
+          </div>
+          <div className="text-xl font-extrabold text-white">
+            {client.emailLog.filter(e => e.status === 'SENT').length} / {client.emailLog.length}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Audit log tracking active</div>
         </div>
       </div>
 
-      {/* Scores */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div className="flex flex-wrap items-center gap-6 justify-between">
-          <div className="flex gap-6">
+      {/* Executive Suite Tri-Merge Bureau Scores Card */}
+      <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md transition-all duration-300 hover:border-border-gold hover:shadow-glow-gold">
+        {/* Subtle ambient top gradient */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-lux-gold">
+                Executive Suite Audit
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-lux-gold/10 text-lux-gold border border-border-gold">
+                Tri-Merge Verified
+              </span>
+            </div>
+            <div className="text-lg font-bold text-lux-primary">Live Institutional Bureau Metrics</div>
+            <p className="text-xs text-lux-secondary mt-0.5">Real-time credit profile verification across national credit repositories.</p>
+          </div>
+
+          <div className="flex items-center gap-4 sm:gap-6">
             {[
-              { bureau: 'Equifax', score: client.creditProfile.currentScores.equifax, color: 'text-red-400' },
-              { bureau: 'Experian', score: client.creditProfile.currentScores.experian, color: 'text-blue-400' },
-              { bureau: 'TransUnion', score: client.creditProfile.currentScores.transunion, color: 'text-purple-400' },
+              { bureau: 'Equifax', score: client.creditProfile.currentScores.equifax, color: 'text-rose-400', border: 'border-rose-500/30' },
+              { bureau: 'Experian', score: client.creditProfile.currentScores.experian, color: 'text-blue-400', border: 'border-blue-500/30' },
+              { bureau: 'TransUnion', score: client.creditProfile.currentScores.transunion, color: 'text-violet-400', border: 'border-violet-500/30' },
             ].map(b => (
-              <div key={b.bureau} className="text-center">
-                <div className={`text-2xl font-bold ${b.color}`}>{b.score ?? '—'}</div>
-                <div className="text-xs text-slate-500">{b.bureau}</div>
+              <div key={b.bureau} className={`text-center p-3 rounded-xl bg-surface-elevated/70 border ${b.border} min-w-[85px] shadow-sm`}>
+                <div className={`text-2xl font-black ${b.color}`}>{b.score ?? '—'}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-lux-secondary mt-0.5">{b.bureau}</div>
               </div>
             ))}
+
+            <div className="text-center p-3 rounded-xl bg-lux-gold/10 border border-border-gold min-w-[85px] shadow-sm">
+              <div className="text-2xl font-black text-lux-gold">{client.creditProfile.targetScore}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-lux-gold mt-0.5">Target</div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-emerald-400">{client.creditProfile.targetScore}</div>
-            <div className="text-xs text-slate-500">Target Score</div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button 
+              onClick={() => runBusinessAudit()} 
+              disabled={runningBizAudit}
+              className="flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-600/20 px-4 py-3 text-xs font-bold text-indigo-200 shadow-sm transition-all hover:bg-indigo-600 hover:text-white disabled:opacity-50"
+            >
+              {runningBizAudit ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
+              <span>{runningBizAudit ? 'Running 5 Audits...' : 'Run 5-Prompt Biz Audit'}</span>
+            </button>
+
+            <button 
+              onClick={runAgents} 
+              disabled={runningAgents}
+              className="flex items-center gap-2 rounded-xl border border-border-gold bg-lux-gold/10 px-5 py-3 text-xs font-bold text-lux-gold shadow-lux-sm transition-all hover:bg-lux-gold hover:text-canvas-base disabled:opacity-50"
+            >
+              {runningAgents ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              <span>{runningAgents ? 'Executing 8 Engines...' : 'Execute 8 AI Agents'}</span>
+            </button>
           </div>
-          <button onClick={runAgents} disabled={runningAgents}
-            className="flex items-center gap-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors">
-            {runningAgents ? '⏳ Running All 8 Agents...' : '🤖 Run All 8 Agents'}
-          </button>
         </div>
       </div>
 
-      {/* Intake Link */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="text-xs text-slate-400 mb-1">🔗 Client Intake Link (share with client to submit their credit report)</div>
-          <div className="text-sm text-blue-400 font-mono truncate">{intakeUrl}</div>
+      {/* Client Intake Share Banner */}
+      <div className="glass-panel p-4.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-slate-800">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+            <Copy className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-white">Client Self-Service Intake Portal</div>
+            <div className="text-[11px] text-slate-400 font-mono truncate mt-0.5">{intakeUrl}</div>
+          </div>
         </div>
-        <button onClick={() => navigator.clipboard.writeText(intakeUrl)} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg text-sm transition-colors shrink-0">
-          📋 Copy Link
+
+        <button 
+          onClick={copyIntakeLink}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition-all shrink-0 border border-slate-700"
+        >
+          {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{copiedLink ? 'Copied to Clipboard!' : 'Copy Portal URL'}</span>
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-slate-800 flex gap-1 overflow-x-auto">
-        {([['repair', '⚡ Auto Repair'], ['overview', '📋 Overview'], ['agents', `🤖 Agents (${agentsDone}/8)`], ['emails', `📧 Emails (${client.emailLog.length})`], ['disputes', `⚖️ Letters (${client.disputes.length})`], ['agreement', '📄 Agreement']] as [Tab, string][]).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} className={tabCls(t)}>{label}</button>
-        ))}
+      {/* Floating Glassmorphic Tabs Navigation */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const isActive = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`relative px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
+                isActive
+                  ? 'text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeClientTab"
+                  className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-violet-600 rounded-xl shadow-md shadow-indigo-600/30"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span>{t.label}</span>
+                {t.count !== undefined && (
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {t.count}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Tab: Auto Repair Engine */}
-      {tab === 'repair' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <AutoRepairEngine client={client} onComplete={(updated) => setClient(updated)} />
-        </div>
-      )}
+      {/* Tab Panels with AnimatePresence */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18 }}
+        >
+          {/* Tab: Auto Repair */}
+          {tab === 'repair' && (
+            <div className="glass-card rounded-2xl p-6">
+              <AutoRepairEngine client={client} onComplete={(updated) => setClient(updated)} />
+            </div>
+          )}
 
-      {/* Tab: Overview */}
-      {tab === 'overview' && (
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Timeline */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-            <h3 className="font-semibold text-white mb-4">Pipeline Progress</h3>
-            <div className="space-y-3">
-              {STAGE_ORDER.map((stage, i) => {
-                const done = i <= currentStageIdx;
-                const current = i === currentStageIdx;
-                const meta = PIPELINE_STAGES[stage];
-                return (
-                  <div key={stage} className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${done ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-500'} ${current ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-slate-900' : ''}`}>
-                      {done && !current ? '✓' : i + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className={`text-sm font-medium ${current ? 'text-blue-300' : done ? 'text-white' : 'text-slate-500'}`}>{meta.label}</div>
-                      <div className="text-xs text-slate-600">{meta.description}</div>
-                    </div>
-                    {current && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Current</span>}
+          {/* Tab: Overview */}
+          {tab === 'overview' && (
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Pipeline Timeline */}
+              <div className="glass-card rounded-2xl p-6">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-4 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span>Pipeline Milestone Progression</span>
+                </h3>
+                <div className="space-y-4">
+                  {STAGE_ORDER.map((stage, i) => {
+                    const done = i <= currentStageIdx;
+                    const current = i === currentStageIdx;
+                    const meta = PIPELINE_STAGES[stage];
+                    return (
+                      <div key={stage} className="flex items-start gap-3">
+                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                          current 
+                            ? 'bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-600/40 ring-2 ring-indigo-400/40' 
+                            : done 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-slate-900 border border-slate-800 text-slate-500'
+                        }`}>
+                          {done && !current ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className={`text-xs font-bold ${current ? 'text-indigo-300' : done ? 'text-white' : 'text-slate-500'}`}>
+                            {meta.label}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{meta.description}</div>
+                        </div>
+                        {current && (
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Notes & Negative Items */}
+              <div className="space-y-6">
+                <div className="glass-card rounded-2xl p-6">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white mb-3 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-violet-400" />
+                    <span>Case Consultant Notes</span>
+                  </h3>
+                  <p className="text-slate-400 text-xs whitespace-pre-wrap leading-relaxed">
+                    {client.notes || 'No specialized underwriting or audit notes registered for this profile.'}
+                  </p>
+                </div>
+
+                <div className="glass-card rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                      <span>Audited Derogatory Trade Lines ({client.creditProfile.negativeItems.length})</span>
+                    </h3>
                   </div>
+                  
+                  {client.creditProfile.negativeItems.length === 0 ? (
+                    <p className="text-slate-500 text-xs">No derogatory items detected on file. Upload credit report text to execute parser.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {client.creditProfile.negativeItems.slice(0, 5).map(item => (
+                        <div key={item.id} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-4">
+                          <div>
+                            <div className="text-xs font-bold text-white">{item.creditor}</div>
+                            <div className="text-[10px] text-slate-400 uppercase font-semibold mt-0.5">{item.type.replace(/_/g, ' ')} · {item.bureau}</div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                            Score Impact: {item.impactScore}/5
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab: Commercial Audit (5 Prompts) */}
+          {tab === 'business-audit' && (
+            <div className="space-y-6">
+              {/* Executive Suite Summary Banner */}
+              <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md transition-all duration-300 hover:border-border-gold hover:shadow-glow-gold">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
+
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-lux-gold">
+                        Executive Underwriting Suite
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-lux-gold/10 text-lux-gold border border-border-gold">
+                        5-Prompt Commercial Engine
+                      </span>
+                    </div>
+                    <h2 className="text-xl font-extrabold text-lux-primary">
+                      Autonomous Commercial Underwriting & Funding Readiness
+                    </h2>
+                    <p className="text-xs text-lux-secondary max-w-2xl leading-relaxed">
+                      Audits legal formation, physical/digital footprint integrity, operational NAICS classification, and commingling risks to ensure zero lender red flags.
+                    </p>
+                  </div>
+
+                  {/* Readiness Status & Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="p-3.5 rounded-xl bg-surface-elevated/80 border border-slate-800 flex items-center gap-3">
+                      <div className="text-center px-2">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Verdict</div>
+                        {client.agentOutputs['BIZ_FUNDING_READINESS']?.verdict === 'READY' ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-400">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> READY
+                          </span>
+                        ) : client.agentOutputs['BIZ_FUNDING_READINESS']?.verdict === 'NEEDS_ATTENTION' ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-black text-amber-400">
+                            <AlertTriangle className="w-3.5 h-3.5" /> ATTENTION
+                          </span>
+                        ) : client.agentOutputs['BIZ_FUNDING_READINESS']?.verdict === 'FIX_BEFORE_APPLYING' ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-black text-rose-400">
+                            <XCircle className="w-3.5 h-3.5" /> FIX FIRST
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-slate-500">PENDING</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowBizConfigModal(true)}
+                        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all shadow-sm"
+                      >
+                        <Sliders className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>Parameters</span>
+                      </button>
+
+                      <button
+                        onClick={() => runBusinessAudit()}
+                        disabled={runningBizAudit}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-gold bg-lux-gold/15 hover:bg-lux-gold hover:text-canvas-base text-lux-gold text-xs font-bold shadow-lux-sm transition-all disabled:opacity-50"
+                      >
+                        {runningBizAudit ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                        <span>{runningBizAudit ? 'Executing 5 Audits...' : 'Run All 5 Audits'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-parameters preview chips */}
+                <div className="mt-5 pt-4 border-t border-border-hairline grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs relative z-10">
+                  <div className="bg-surface-elevated/40 border border-border-hairline rounded-lg p-2.5">
+                    <span className="text-[10px] text-lux-tertiary uppercase font-bold block">Entity & State</span>
+                    <span className="text-lux-primary font-bold">{client.businessProfile?.entityType || 'LLC'} · {client.businessProfile?.formationState || client.state}</span>
+                  </div>
+                  <div className="bg-surface-elevated/40 border border-border-hairline rounded-lg p-2.5">
+                    <span className="text-[10px] text-lux-tertiary uppercase font-bold block">Address Category</span>
+                    <span className="text-lux-primary font-bold">{client.businessProfile?.addressType ? client.businessProfile.addressType.replace(/_/g, ' ') : 'UNSPECIFIED'}</span>
+                  </div>
+                  <div className="bg-surface-elevated/40 border border-border-hairline rounded-lg p-2.5">
+                    <span className="text-[10px] text-lux-tertiary uppercase font-bold block">Dedicated Bank</span>
+                    <span className={client.businessProfile?.hasDedicatedBusinessBank ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                      {client.businessProfile?.hasDedicatedBusinessBank ? (client.businessProfile.businessBankName || 'Verified') : 'No Commercial Bank'}
+                    </span>
+                  </div>
+                  <div className="bg-surface-elevated/40 border border-border-hairline rounded-lg p-2.5">
+                    <span className="text-[10px] text-lux-tertiary uppercase font-bold block">Commingling Status</span>
+                    <span className={client.businessProfile?.comminglingDetected ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
+                      {client.businessProfile?.comminglingDetected ? 'Commingling Flagged' : 'Segregated Clean'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sequential 5 Prompts Cards */}
+              <div className="space-y-4">
+                {BIZ_AGENT_ORDER.map((agentId, index) => {
+                  const meta = AGENT_META[agentId];
+                  const result = client.agentOutputs[agentId];
+                  const isRunningSingle = runningSingleBiz === agentId;
+                  const isExpanded = selectedAgent === agentId;
+
+                  return (
+                    <motion.div
+                      key={agentId}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+                        isExpanded
+                          ? 'border-indigo-500/80 bg-surface-elevated/90 shadow-xl shadow-indigo-600/10'
+                          : result?.status === 'COMPLETE'
+                            ? 'border-slate-800 bg-surface-subtle/70 hover:border-border-gold/60'
+                            : 'border-slate-800/60 bg-surface-subtle/40 opacity-75'
+                      }`}
+                    >
+                      {/* Card Header Bar */}
+                      <div 
+                        onClick={() => setSelectedAgent(isExpanded ? null : agentId)}
+                        className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none"
+                      >
+                        <div className="flex items-start sm:items-center gap-3.5">
+                          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/10 border border-indigo-500/30 text-indigo-300 font-black text-sm shrink-0">
+                            P{index + 1}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-white tracking-wide">{meta.title}</span>
+                              <span className="text-[10px] uppercase font-bold tracking-widest text-lux-gold px-2 py-0.5 rounded-full bg-lux-gold/10 border border-border-gold">
+                                Prompt {index + 1}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{meta.description}</p>
+                          </div>
+                        </div>
+
+                        {/* Status + Actions */}
+                        <div className="flex items-center gap-3 shrink-0" onClick={e => e.stopPropagation()}>
+                          {result?.verdict === 'READY' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3 h-3" /> READY
+                            </span>
+                          )}
+                          {result?.verdict === 'NEEDS_ATTENTION' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                              <AlertTriangle className="w-3 h-3" /> ATTENTION
+                            </span>
+                          )}
+                          {result?.verdict === 'FIX_BEFORE_APPLYING' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                              <XCircle className="w-3 h-3" /> FIX BEFORE APPLYING
+                            </span>
+                          )}
+
+                          <button
+                            onClick={() => runSingleBizPrompt(agentId)}
+                            disabled={isRunningSingle || runningBizAudit}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all disabled:opacity-50"
+                          >
+                            {isRunningSingle ? <RefreshCw className="w-3 h-3 animate-spin text-indigo-400" /> : <Play className="w-3 h-3 fill-current text-indigo-400" />}
+                            <span>{isRunningSingle ? 'Running...' : result ? 'Re-run Prompt' : 'Run Prompt'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => setSelectedAgent(isExpanded ? null : agentId)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-colors"
+                          >
+                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expandable Markdown Body */}
+                      <AnimatePresence>
+                        {isExpanded && result && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="border-t border-slate-800/80 p-5 bg-slate-950/70"
+                          >
+                            <div
+                              className="prose-crm max-h-[550px] overflow-y-auto scrollbar-thin p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 leading-relaxed font-sans"
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(result.output) }}
+                            />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Tab: AI Agents */}
+          {tab === 'agents' && (
+            <div className="grid md:grid-cols-2 gap-4">
+              {AGENT_ORDER.map(agentId => {
+                const meta = AGENT_META[agentId];
+                const result = client.agentOutputs[agentId];
+                const isSelected = selectedAgent === agentId;
+                return (
+                  <motion.div 
+                    key={agentId} 
+                    onClick={() => setSelectedAgent(isSelected ? null : agentId)}
+                    className={`cursor-pointer glass-card rounded-2xl p-5 transition-all ${
+                      isSelected 
+                        ? 'border-indigo-500 md:col-span-2 shadow-xl shadow-indigo-600/15' 
+                        : result 
+                          ? 'glass-card-hover border-slate-800' 
+                          : 'opacity-60 border-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 text-xs font-bold">
+                          <Bot className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-white">{meta.title}</div>
+                          <div className="text-[11px] text-slate-400">{meta.description}</div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                        result?.status === 'COMPLETE' 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                          : result?.status === 'RUNNING' 
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                            : 'bg-slate-800 text-slate-500'
+                      }`}>
+                        {result?.status ?? 'PENDING'}
+                      </span>
+                    </div>
+
+                    {isSelected && result && (
+                      <div className="mt-4 pt-4 border-t border-slate-800 space-y-4">
+                        <div className="prose-crm max-h-[500px] overflow-y-auto scrollbar-thin p-3 rounded-xl bg-slate-950/70 border border-slate-800" dangerouslySetInnerHTML={{ __html: renderMarkdown(result.output) }} />
+                        
+                        {(result.letters?.length ?? 0) > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {result.letters!.map(l => (
+                              <button 
+                                key={l.id} 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  printLetter(l.content, `${l.type} – ${l.bureau || l.creditor}`); 
+                                }}
+                                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs px-3.5 py-2 rounded-xl font-bold transition-all shadow-md"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                                <span>Print {l.bureau || l.creditor} Notice</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
                 );
               })}
             </div>
-          </div>
+          )}
 
-          {/* Notes + Negative Items Preview */}
-          <div className="space-y-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <h3 className="font-semibold text-white mb-3">Notes</h3>
-              <p className="text-slate-400 text-sm whitespace-pre-wrap">{client.notes || 'No notes added.'}</p>
-            </div>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-              <h3 className="font-semibold text-white mb-3">Negative Items ({client.creditProfile.negativeItems.length})</h3>
-              {client.creditProfile.negativeItems.length === 0
-                ? <p className="text-slate-500 text-sm">No negative items entered. Run agents after uploading the credit report.</p>
-                : client.creditProfile.negativeItems.slice(0, 5).map(item => (
-                  <div key={item.id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
-                    <div>
-                      <div className="text-sm text-white">{item.creditor}</div>
-                      <div className="text-xs text-slate-500">{item.type.replace(/_/g, ' ')} · {item.bureau}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-red-400">{'⭐'.repeat(item.impactScore)}</span>
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab: Agents */}
-      {tab === 'agents' && (
-        <div className="grid md:grid-cols-3 gap-4">
-          {AGENT_ORDER.map(agentId => {
-            const meta = AGENT_META[agentId];
-            const result = client.agentOutputs[agentId];
-            const isSelected = selectedAgent === agentId;
-            return (
-              <div key={agentId} onClick={() => setSelectedAgent(isSelected ? null : agentId)}
-                className={`cursor-pointer bg-slate-900 border rounded-xl p-4 transition-all ${isSelected ? 'border-blue-500 col-span-full' : result ? 'border-slate-700 hover:border-blue-600' : 'border-slate-800 opacity-60'}`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-2xl">{meta.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-sm text-white">{meta.title}</div>
-                    <div className="text-xs text-slate-500 truncate">{meta.description}</div>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold shrink-0 ${result?.status === 'COMPLETE' ? 'bg-green-500/20 text-green-400' : result?.status === 'RUNNING' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-slate-700 text-slate-500'}`}>
-                    {result?.status ?? 'PENDING'}
-                  </span>
+          {/* Tab: Emails */}
+          {tab === 'emails' && (
+            <div className="glass-card rounded-2xl p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Automated Compliance Email Dispatches</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Automated Mailjet triggers based on pipeline stage triggers.</p>
                 </div>
-                {isSelected && result && (
-                  <div className="mt-4 border-t border-slate-700 pt-4">
-                    <div className="prose-crm max-h-[600px] overflow-y-auto scrollbar-thin" dangerouslySetInnerHTML={{ __html: renderMarkdown(result.output) }} />
-                    {(result.letters?.length ?? 0) > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {result.letters!.map(l => (
-                          <button key={l.id} onClick={(e) => { e.stopPropagation(); printLetter(l.content, `${l.type} – ${l.bureau || l.creditor}`); }}
-                            className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg">
-                            🖨️ Print {l.bureau || l.creditor} Letter
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
-            );
-          })}
-          {agentsDone === 0 && (
-            <div className="col-span-full text-center py-12 text-slate-500">
-              <div className="text-4xl mb-3">🤖</div>
-              <p>No agent outputs yet.</p>
-              <button onClick={runAgents} className="mt-4 bg-purple-700 hover:bg-purple-600 text-white px-6 py-2.5 rounded-lg font-semibold text-sm">
-                Run All 8 Agents Now
-              </button>
+
+              <div className="space-y-3">
+                {EMAIL_STAGES.map(stage => {
+                  const meta = EMAIL_STAGE_META[stage];
+                  const sent = client.emailLog.find(e => e.stage === stage && e.status === 'SENT');
+                  const isSending = sendingEmail === stage;
+                  return (
+                    <div key={stage} className={`p-4 rounded-xl border flex items-center justify-between gap-4 transition-all ${
+                      sent ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-900/60 border-slate-800'
+                    }`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-indigo-400">
+                          <Mail className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white truncate">{meta.subject}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{meta.trigger}</div>
+                          {sent && (
+                            <div className="text-[10px] text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Delivered {new Date(sent.sentAt!).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => sendEmail(stage)} 
+                        disabled={isSending}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                          sent 
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' 
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/25'
+                        } disabled:opacity-50`}
+                      >
+                        {isSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        <span>{isSending ? 'Sending...' : sent ? 'Resend Copy' : 'Dispatch Email'}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Tab: Emails */}
-      {tab === 'emails' && (
-        <div className="space-y-4">
-          <h3 className="font-semibold text-white">Automated Email Sequence</h3>
-          <div className="space-y-3">
-            {EMAIL_STAGES.map(stage => {
-              const meta = EMAIL_STAGE_META[stage];
-              const sent = client.emailLog.find(e => e.stage === stage && e.status === 'SENT');
-              const isSending = sendingEmail === stage;
-              return (
-                <div key={stage} className={`bg-slate-900 border rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 ${sent ? 'border-green-800' : 'border-slate-800'}`}>
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="text-2xl shrink-0">{meta.icon}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm text-white truncate">{meta.subject}</div>
-                      <div className="text-xs text-slate-500">{meta.trigger}</div>
-                      {sent && <div className="text-xs text-green-400 mt-0.5">✅ Sent {new Date(sent.sentAt!).toLocaleString()}</div>}
+          {/* Tab: Dispute Letters */}
+          {tab === 'disputes' && (
+            <div className="glass-card rounded-2xl p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white">Generated FCRA & Goodwill Letters</h3>
+                  <p className="text-slate-400 text-xs mt-0.5">Ready for Certified Mail or online overnight dispatch.</p>
+                </div>
+              </div>
+
+              {client.disputes.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <Scale className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p className="text-xs">No dispute letters generated yet. Execute the AI Agents tab to produce letters.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {client.disputes.map(letter => (
+                    <div key={letter.id} className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Scale className="w-4 h-4 text-indigo-400" />
+                          <span className="text-xs font-bold text-white uppercase tracking-wider">
+                            {letter.type.replace(/_/g, ' ')} — {letter.bureau || 'Creditor Target'}
+                          </span>
+                        </div>
+                        <button 
+                          onClick={() => printLetter(letter.content, `${letter.type} – ${letter.bureau || ''}`)}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Print Certified PDF</span>
+                        </button>
+                      </div>
+
+                      <pre className="p-4 rounded-xl bg-slate-950 font-mono text-[11px] text-slate-300 leading-relaxed max-h-60 overflow-y-auto whitespace-pre-wrap border border-slate-900">
+                        {letter.content}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab: Legal Agreement */}
+          {tab === 'agreement' && (
+            <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 md:p-8 shadow-lux-md transition-all duration-300 hover:border-border-gold hover:shadow-glow-gold space-y-6">
+              {/* Ambient top gradient */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-lux-gold">
+                      Executive Protocol
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-lux-gold/10 text-lux-gold border border-border-gold">
+                      Binding Accord
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-lux-primary">Personal Guarantor Consulting Agreement</h3>
+                  <p className="text-xs text-lux-secondary mt-0.5">Florida Chapter 687 Compliant Statutory Retainer & Success Fee Agreement</p>
+                </div>
+                <button 
+                  onClick={printAgreement}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border-gold bg-lux-gold/10 hover:bg-lux-gold hover:text-canvas-base text-lux-gold text-xs font-bold shadow-lux-sm transition-all shrink-0"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Formal Sovereign Copy</span>
+                </button>
+              </div>
+
+              <div className="rounded-2xl overflow-hidden border border-border-gold/30 shadow-2xl relative z-10" dangerouslySetInnerHTML={{ __html: buildAgreement(client) }} />
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Configure Business Parameters Modal */}
+      <AnimatePresence>
+        {showBizConfigModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-2xl bg-surface-subtle border border-slate-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-surface-elevated/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                    <Building2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">Commercial Underwriting Profile</h3>
+                    <p className="text-[11px] text-slate-400">Tune parameters verified by the 5-Prompt Institutional Underwriting Engine</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBizConfigModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Form Body */}
+              <form onSubmit={saveBusinessProfileAndRerun} className="p-6 overflow-y-auto space-y-6 flex-1 scrollbar-thin">
+                {/* Section 1: Formation & EIN */}
+                <div className="space-y-3">
+                  <div className="text-xs font-bold uppercase tracking-wider text-lux-gold flex items-center gap-2">
+                    <span>Prompt 1: LLC Formation & EIN Details</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Entity Structure</label>
+                      <select
+                        value={bizFormData.entityType || 'LLC'}
+                        onChange={e => setBizFormData({ ...bizFormData, entityType: e.target.value as any })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      >
+                        <option value="LLC">LLC</option>
+                        <option value="C-Corp">C-Corp</option>
+                        <option value="S-Corp">S-Corp</option>
+                        <option value="Sole Proprietor">Sole Proprietor</option>
+                        <option value="Partnership">Partnership</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Formation State</label>
+                      <input
+                        type="text"
+                        value={bizFormData.formationState || client?.state || ''}
+                        onChange={e => setBizFormData({ ...bizFormData, formationState: e.target.value })}
+                        placeholder="FL"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Formation Year</label>
+                      <input
+                        type="number"
+                        value={bizFormData.formationYear || 2022}
+                        onChange={e => setBizFormData({ ...bizFormData, formationYear: parseInt(e.target.value) || 2022 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
                     </div>
                   </div>
-                  <button onClick={() => sendEmail(stage)} disabled={isSending}
-                    className={`text-sm font-semibold px-4 py-2 rounded-lg transition-colors shrink-0 ${sent ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' : 'bg-blue-700 hover:bg-blue-600 text-white'} disabled:opacity-50`}>
-                    {isSending ? '⏳ Sending...' : sent ? '🔁 Resend' : '📤 Send Now'}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">EIN Verification Status</label>
+                      <select
+                        value={bizFormData.einLetterStatus || 'VERIFIED_CP575'}
+                        onChange={e => setBizFormData({ ...bizFormData, einLetterStatus: e.target.value as any })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      >
+                        <option value="VERIFIED_CP575">CP-575 Official IRS Notice</option>
+                        <option value="VERIFIED_147C">147C Replacement Letter</option>
+                        <option value="ONLINE_CONFIRMATION">Online SS-4 PDF</option>
+                        <option value="UNVERIFIED">Unverified / Verbal</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Ownership Percentage (%)</label>
+                      <input
+                        type="number"
+                        value={bizFormData.ownershipPercentage ?? 100}
+                        onChange={e => setBizFormData({ ...bizFormData, ownershipPercentage: parseInt(e.target.value) || 100 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.activeGoodStanding ?? true}
+                        onChange={e => setBizFormData({ ...bizFormData, activeGoodStanding: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                      />
+                      <span>Active SOS Good Standing</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.operatingAgreementFiled ?? true}
+                        onChange={e => setBizFormData({ ...bizFormData, operatingAgreementFiled: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                      />
+                      <span>Operating Agreement Executed</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section 2: Address & Digital Footprint */}
+                <div className="space-y-3 pt-3 border-t border-slate-800">
+                  <div className="text-xs font-bold uppercase tracking-wider text-lux-gold flex items-center gap-2">
+                    <span>Prompt 2: Address Suitability & Digital Presence</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Physical Address Classification</label>
+                      <select
+                        value={bizFormData.addressType || 'EXECUTIVE_SUITE'}
+                        onChange={e => setBizFormData({ ...bizFormData, addressType: e.target.value as any })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      >
+                        <option value="BRICK_AND_MORTAR">Brick & Mortar Commercial Space</option>
+                        <option value="EXECUTIVE_SUITE">Executive Suite / Regus with Dedicated Suite</option>
+                        <option value="VIRTUAL_OFFICE">Virtual Office (Co-Working)</option>
+                        <option value="HOME_ADDRESS">Residential Home Address</option>
+                        <option value="CMRA_UPS_BOX">CMRA / UPS Store / Post Box</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Dedicated Suite Number</label>
+                      <input
+                        type="text"
+                        value={bizFormData.dedicatedSuiteNumber || ''}
+                        onChange={e => setBizFormData({ ...bizFormData, dedicatedSuiteNumber: e.target.value })}
+                        placeholder="Suite 300"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Corporate Domain Email</label>
+                      <input
+                        type="email"
+                        value={bizFormData.businessEmail || ''}
+                        onChange={e => setBizFormData({ ...bizFormData, businessEmail: e.target.value })}
+                        placeholder="contact@company.com"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Business Website</label>
+                      <input
+                        type="url"
+                        value={bizFormData.websiteUrl || ''}
+                        onChange={e => setBizFormData({ ...bizFormData, websiteUrl: e.target.value })}
+                        placeholder="https://company.com"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Dedicated Business Phone</label>
+                      <input
+                        type="text"
+                        value={bizFormData.businessPhone || ''}
+                        onChange={e => setBizFormData({ ...bizFormData, businessPhone: e.target.value })}
+                        placeholder="(800) 555-0199"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.has411Listing ?? true}
+                        onChange={e => setBizFormData({ ...bizFormData, has411Listing: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                      />
+                      <span>National 411 Directory Listed</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.hasGoogleBusinessProfile ?? true}
+                        onChange={e => setBizFormData({ ...bizFormData, hasGoogleBusinessProfile: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                      />
+                      <span>Google Business Profile Active</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Section 3: Operations & NAICS */}
+                <div className="space-y-3 pt-3 border-t border-slate-800">
+                  <div className="text-xs font-bold uppercase tracking-wider text-lux-gold flex items-center gap-2">
+                    <span>Prompt 3: Actual Operations & NAICS Code</span>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-semibold block mb-1">
+                      What does the business ACTUALLY do? (Operational Reality)
+                    </label>
+                    <textarea
+                      value={bizFormData.actualOperationsDescription || ''}
+                      onChange={e => setBizFormData({ ...bizFormData, actualOperationsDescription: e.target.value })}
+                      placeholder="e.g. Provides residential HVAC repair, preventative heating maintenance, and duct installation."
+                      rows={2}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-semibold block mb-1">Registered NAICS Code (if known)</label>
+                    <input
+                      type="text"
+                      value={bizFormData.currentNaicsCode || ''}
+                      onChange={e => setBizFormData({ ...bizFormData, currentNaicsCode: e.target.value })}
+                      placeholder="238220"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 4: Commingling & Banking */}
+                <div className="space-y-3 pt-3 border-t border-slate-800">
+                  <div className="text-xs font-bold uppercase tracking-wider text-lux-gold flex items-center gap-2">
+                    <span>Prompt 4: Commingling & Banking Forensic Flags</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Commercial Bank Name</label>
+                      <input
+                        type="text"
+                        value={bizFormData.businessBankName || 'Chase Business Checking'}
+                        onChange={e => setBizFormData({ ...bizFormData, businessBankName: e.target.value })}
+                        placeholder="Chase Business"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-slate-400 font-semibold block mb-1">Avg Monthly Commercial Revenue ($)</label>
+                      <input
+                        type="number"
+                        value={bizFormData.averageMonthlyRevenue ?? 20000}
+                        onChange={e => setBizFormData({ ...bizFormData, averageMonthlyRevenue: parseInt(e.target.value) || 0 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.hasDedicatedBusinessBank ?? true}
+                        onChange={e => setBizFormData({ ...bizFormData, hasDedicatedBusinessBank: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                      />
+                      <span>Dedicated Business Checking Account</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={bizFormData.comminglingDetected ?? false}
+                        onChange={e => setBizFormData({ ...bizFormData, comminglingDetected: e.target.checked })}
+                        className="rounded border-slate-700 bg-slate-900 text-rose-500"
+                      />
+                      <span className="text-rose-300">Flag Commingling (Personal Card on Biz Expenses)</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowBizConfigModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingBizProfile}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+                  >
+                    {savingBizProfile ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>{savingBizProfile ? 'Saving & Auditing...' : 'Save & Execute 5 Audits'}</span>
                   </button>
                 </div>
-              );
-            })}
+              </form>
+            </motion.div>
           </div>
+        )}
+      </AnimatePresence>
 
-          {/* Email Log */}
-          {client.emailLog.length > 0 && (
-            <div className="mt-6">
-              <h3 className="font-semibold text-white mb-3">Email Log</h3>
-              <div className="space-y-2">
-                {[...client.emailLog].reverse().map(log => (
-                  <div key={log.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${log.status === 'SENT' ? 'bg-green-500/20 text-green-400' : log.status === 'FAILED' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                      {log.status}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white truncate">{log.subject}</div>
-                      <div className="text-xs text-slate-500">{log.sentAt ? new Date(log.sentAt).toLocaleString() : 'Pending'} {log.mailjetMessageId && log.mailjetMessageId !== 'PREVIEW_MODE' ? `· MJ ID: ${log.mailjetMessageId}` : ''}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Disputes */}
-      {tab === 'disputes' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white">{client.disputes.length} Dispute / Goodwill Letters</h3>
-            <div className="flex gap-3">
-              {client.disputes.length > 0 && (
-                <button onClick={() => {
-                  const win = window.open('', '_blank');
-                  if (!win) return;
-                  win.document.write(`<!DOCTYPE html><html><head><title>All Letters – ${client.firstName} ${client.lastName}</title><style>body{font-family:Georgia,serif;max-width:700px;margin:40px auto;padding:40px;line-height:1.6;white-space:pre-wrap;} .page-break { page-break-before: always; }</style></head><body>`);
-                  client.disputes.forEach((l, i) => {
-                    win.document.write(`<div>${l.content}</div>`);
-                    if (i < client.disputes.length - 1) win.document.write('<div class="page-break"></div>');
-                  });
-                  win.document.write(`</body><script>window.print();</script></html>`);
-                  win.document.close();
-                }} className="bg-slate-700 hover:bg-slate-600 text-white text-sm px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors">
-                  🖨️ Print All
-                </button>
-              )}
-              {client.disputes.length === 0 && (
-                <button onClick={runAgents} className="bg-purple-700 hover:bg-purple-600 text-white text-sm px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors">
-                  🤖 Generate Letters
-                </button>
-              )}
-            </div>
-          </div>
-          {client.disputes.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
-              <div className="text-4xl mb-3">⚖️</div>
-              <p>No letters generated yet. Run the agents to produce FCRA dispute and goodwill letters.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {client.disputes.map(letter => (
-                <div key={letter.id} className={`bg-slate-900 border rounded-xl p-4 ${selectedDispute === letter.id ? 'border-blue-500' : 'border-slate-700'}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                    <div>
-                      <div className="font-semibold text-white">{letter.type.replace(/_/g, ' ')} — {letter.bureau || letter.creditor}</div>
-                      <div className="text-xs text-slate-500">
-                        {letter.deadline && `📅 30-Day Deadline: ${new Date(letter.deadline).toLocaleDateString()} · `}
-                        Status: <span className={letter.status === 'SENT' ? 'text-green-400' : 'text-yellow-400'}>{letter.status}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => setSelectedDispute(selectedDispute === letter.id ? null : letter.id)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1.5 rounded-lg">
-                        {selectedDispute === letter.id ? '▲ Collapse' : '▼ Preview'}
-                      </button>
-                      <button onClick={() => printLetter(letter.content, `${letter.type} – ${letter.bureau || letter.creditor}`)} className="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg">
-                        🖨️ Print
-                      </button>
-                      <button onClick={() => navigator.clipboard.writeText(letter.content)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs px-3 py-1.5 rounded-lg">
-                        📋 Copy
-                      </button>
-                    </div>
-                  </div>
-                  {selectedDispute === letter.id && (
-                    <pre className="bg-slate-950 rounded-lg p-4 text-xs text-slate-300 whitespace-pre-wrap font-mono max-h-96 overflow-y-auto scrollbar-thin">
-                      {letter.content}
-                    </pre>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Agreement */}
-      {tab === 'agreement' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white">Personal Guarantor & Consulting Agreement</h3>
-            <button onClick={printAgreement} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors">
-              🖨️ Print / Download PDF
-            </button>
-          </div>
-          <div className="bg-white rounded-xl overflow-hidden" dangerouslySetInnerHTML={{ __html: buildAgreement(client) }} />
-        </div>
-      )}
     </div>
   );
 }

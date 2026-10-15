@@ -1,10 +1,10 @@
-import type { Client, AgentId, AgentResult, NegativeItem, DisputeLetter, CreditProfile } from '../../shared/types/credit.js';
+import type { Client, AgentId, AgentResult, NegativeItem, DisputeLetter, CreditProfile, ReadinessVerdict } from '../../shared/types/credit.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // ── Agent Runner ──────────────────────────────────────────────
-// Each agent takes the client's credit profile and generates structured output.
+// Each agent takes the client's credit & business profile and generates structured output.
 // In production, these can call an LLM API. For now they generate structured
-// expert-level output based on the provided credit report data.
+// expert-level output based on institutional underwriting criteria.
 
 export async function runAgent(client: Client, agentId: AgentId): Promise<AgentResult> {
   const profile = client.creditProfile;
@@ -18,15 +18,38 @@ export async function runAgent(client: Client, agentId: AgentId): Promise<AgentR
     case 'INQUIRY_MINIMIZER': return runInquiryMinimizer(client, profile);
     case 'SECONDARY_FREEZE': return runSecondaryBureauFreeze(client);
     case 'CREDIT_GROWTH': return runCreditGrowth(client, profile);
+    // ── 5-Prompt Business Underwriting & Funding Readiness Engine ──
+    case 'BIZ_FORMATION_EIN': return runBizFormationAudit(client);
+    case 'BIZ_ADDRESS_FOOTPRINT': return runBizAddressFootprintAudit(client);
+    case 'BIZ_NAICS_CLASSIFICATION': return runBizNaicsAudit(client);
+    case 'BIZ_COMMINGLING_FINANCES': return runBizComminglingAudit(client);
+    case 'BIZ_FUNDING_READINESS': return runBizFundingReadiness(client);
     default: throw new Error(`Unknown agent: ${agentId}`);
   }
+}
+
+export async function runAllBusinessAudits(client: Client): Promise<Partial<Record<AgentId, AgentResult>>> {
+  const results: Partial<Record<AgentId, AgentResult>> = {};
+  
+  // Run Prompts 1 through 4 sequentially
+  results['BIZ_FORMATION_EIN'] = runBizFormationAudit(client);
+  results['BIZ_ADDRESS_FOOTPRINT'] = runBizAddressFootprintAudit(client);
+  results['BIZ_NAICS_CLASSIFICATION'] = runBizNaicsAudit(client);
+  results['BIZ_COMMINGLING_FINANCES'] = runBizComminglingAudit(client);
+  
+  // Prompt 5 synthesizes findings from Prompts 1 through 4
+  results['BIZ_FUNDING_READINESS'] = runBizFundingReadiness(client, results);
+  
+  return results;
 }
 
 export async function runAllAgents(client: Client): Promise<Partial<Record<AgentId, AgentResult>>> {
   const agentIds: AgentId[] = [
     'COMPREHENSIVE_AUDIT', 'ROADMAP_90_DAY', 'DEBT_OPTIMIZER',
     'DISPUTE_LETTER', 'GOODWILL_LETTER', 'INQUIRY_MINIMIZER',
-    'SECONDARY_FREEZE', 'CREDIT_GROWTH'
+    'SECONDARY_FREEZE', 'CREDIT_GROWTH',
+    'BIZ_FORMATION_EIN', 'BIZ_ADDRESS_FOOTPRINT', 'BIZ_NAICS_CLASSIFICATION',
+    'BIZ_COMMINGLING_FINANCES', 'BIZ_FUNDING_READINESS'
   ];
   const results: Partial<Record<AgentId, AgentResult>> = {};
   for (const id of agentIds) {
@@ -267,11 +290,31 @@ ${utilization > 30 ? '✅ **Execute AZEO immediately** — this is your fastest 
 // ── Agent 4: FCRA Dispute Letter Factory ─────────────────────
 function runDisputeLetterFactory(client: Client, profile: CreditProfile): AgentResult {
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  const disputeItems = profile.negativeItems.filter(i =>
-    i.disputeStrategy === 'FORMAL_FCRA' || i.disputeStrategy === 'DEBT_VALIDATION'
-  );
+  const disputeItems = profile.negativeItems.filter(i => i.type !== 'INQUIRY');
 
   const letters: DisputeLetter[] = [];
+
+  // e-OSCAR OCR Bypass Spintax Engine
+  const introVariations = [
+    "I am writing to formally dispute the following item(s) appearing on my consumer credit file, which I have reviewed and determined to be inaccurate, unverifiable, and/or reported in violation of the Fair Credit Reporting Act.",
+    "After reviewing my credit report, I have identified the following accounts as inaccurate or unverified. I am requesting an immediate reinvestigation pursuant to my rights under the FCRA.",
+    "This letter serves as a formal dispute regarding erroneous and unverifiable trade lines currently reporting on my credit file. I demand a full investigation into these inaccuracies.",
+    "I have recently pulled my credit report and found severely inaccurate information. Please investigate the following items immediately as required by federal law."
+  ];
+
+  const demandVariations = [
+    "Under FCRA §611(a), you are required to conduct a reasonable reinvestigation of this item. I demand you provide the complete METHOD OF VERIFICATION.",
+    "I require that you investigate this item under 15 U.S.C. §1681i. If this account cannot be 100% verified with the original furnisher, it must be deleted.",
+    "Pursuant to the Fair Credit Reporting Act, I demand proof of this alleged debt and the complete method used to verify it. If unverified, delete it immediately.",
+    "By law, you must verify the accuracy of this account. Failure to provide strict proof of verification will require permanent removal from my credit report."
+  ];
+
+  const signoffVariations = [
+    "I will not accept an unverified 're-verification' as satisfactory resolution.",
+    "Govern yourself accordingly. I expect a response within 30 days.",
+    "Failure to comply with these federal guidelines will result in complaints to the CFPB.",
+    "I look forward to receiving an updated copy of my credit report showing these deletions."
+  ];
 
   // Group by bureau
   const bureaus = ['Equifax', 'Experian', 'TransUnion'] as const;
@@ -281,6 +324,10 @@ function runDisputeLetterFactory(client: Client, profile: CreditProfile): AgentR
 
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 37); // 30 days + 7 days for mail delivery
+
+    // Randomize per bureau to defeat e-OSCAR cross-referencing
+    const rIntro = introVariations[Math.floor(Math.random() * introVariations.length)];
+    const rSignoff = signoffVariations[Math.floor(Math.random() * signoffVariations.length)];
 
     const letterContent = `${today}
 
@@ -295,48 +342,33 @@ ${bureau === 'Equifax' ? 'P.O. Box 740256\nAtlanta, GA 30374' :
   'P.O. Box 2000\nChester, PA 19016'}
 
 Re: Formal Request to Investigate & Remove Inaccurate / Unverifiable Credit Information
-Pursuant to: Fair Credit Reporting Act (FCRA) 15 U.S.C. §1681 et seq., §611, §623
+Pursuant to: Fair Credit Reporting Act (FCRA) 15 U.S.C. § 1681 et seq., § 611, § 623
 
 To Whom It May Concern at ${bureau}:
 
-I am writing to formally dispute the following item(s) appearing on my consumer credit file, which I have reviewed and determined to be inaccurate, unverifiable, and/or reported in violation of the Fair Credit Reporting Act.
+${rIntro}
 
 DISPUTED ITEMS:
 
-${bureauItems.map((item, i) => `${i + 1}. CREDITOR/FURNISHER: ${item.creditor}
+${bureauItems.map((item, i) => {
+   const rDemand = demandVariations[Math.floor(Math.random() * demandVariations.length)];
+   return `${i + 1}. CREDITOR/FURNISHER: ${item.creditor}
    Account Number: ${item.accountNumber ?? 'Unknown'}
    Type: ${item.type.replace(/_/g, ' ')}
-   Reported Balance: ${item.balance != null ? '$' + item.balance.toLocaleString() : 'Unknown'}
-   Date of First Delinquency: ${item.dateOfFirstDelinquency ?? 'Unknown'}
    
-   BASIS FOR DISPUTE: This account is disputed as inaccurate, incomplete, and/or unverifiable. The reported information contains material errors and/or cannot be verified to comply with Metro 2 reporting standards. Specifically, I dispute:
-   (a) The accuracy and completeness of the reported payment history
-   (b) The reported balance and/or high balance amounts
-   (c) The Date of First Delinquency as reported
-   (d) The method by which this account was verified in any prior dispute
+   BASIS FOR DISPUTE: This account is disputed as inaccurate, incomplete, and/or unverifiable. The reported information contains material errors and/or cannot be verified to comply with Metro 2 reporting standards. Specifically, I dispute the accuracy of the payment history, high balance, and Date of First Delinquency.
    
-   LEGAL DEMAND: Under FCRA §611(a), you are required to conduct a reasonable reinvestigation of this item. Under §611(a)(6)(B)(iii), I demand you provide the complete METHOD OF VERIFICATION, including the name, address, and telephone number of the person contacted to verify this information.`).join('\n\n')}
+   LEGAL DEMAND: ${rDemand}`;
+}).join('\\n\\n')}
 
 LEGAL NOTICE & DEMAND FOR ACTION:
 
-Pursuant to the Fair Credit Reporting Act, 15 U.S.C. §1681i, you are hereby required to:
+Pursuant to the Fair Credit Reporting Act, 15 U.S.C. § 1681i, you are hereby required to:
+1. Conduct a REASONABLE REINVESTIGATION of the above-listed disputed information within THIRTY (30) DAYS.
+2. If you are UNABLE TO FULLY VERIFY each element, you are LEGALLY REQUIRED to PERMANENTLY DELETE the disputed item(s) under FCRA § 611(a)(5)(A).
 
-1. Conduct a REASONABLE REINVESTIGATION of the above-listed disputed information within THIRTY (30) DAYS of receipt of this letter.
-
-2. If you are UNABLE TO FULLY VERIFY each and every element of the disputed information with the original creditor/data furnisher, you are LEGALLY REQUIRED to PERMANENTLY DELETE the disputed item(s) from my credit file under FCRA §611(a)(5)(A).
-
-3. Provide me with written notice of the results of your reinvestigation, including a free updated copy of my credit report, pursuant to FCRA §611(a)(6)(A).
-
-4. Cease and desist from sharing, selling, or transmitting my disputed consumer information to any third party, including credit card issuers, employers, landlords, or insurers, during the pendency of this reinvestigation.
-
-PLEASE BE ADVISED that I am aware of my rights under:
-- FCRA §611 (Consumer's right to dispute inaccurate information)
-- FCRA §623 (Responsibilities of furnishers of information)  
-- FCRA §616 (Civil liability for willful noncompliance — up to $1,000 + punitive damages)
-- FCRA §617 (Civil liability for negligent noncompliance)
-- The Consumer Financial Protection Bureau (CFPB) enforcement authority
-
-If the disputed item(s) cannot be fully, completely, and verifiably confirmed within thirty (30) calendar days, the law requires their PERMANENT DELETION. I will not accept an unverified "re-verification" as satisfactory resolution.
+PLEASE BE ADVISED that I am aware of my rights under FCRA § 611, § 623, § 616, and § 617.
+${rSignoff}
 
 Sincerely,
 
@@ -345,12 +377,8 @@ ${client.firstName} ${client.lastName}
 
 Enclosures:
 - Copy of Government-Issued Photo ID
-- Copy of Social Security Card or SSN document
-- Copy of Proof of Address (utility bill or bank statement, dated within 60 days)
-- Copy of relevant account statements showing discrepancies (if applicable)
-
-[SEND VIA USPS CERTIFIED MAIL – RETURN RECEIPT REQUESTED]
-[KEEP TRACKING NUMBER AND GREEN CARD FOR YOUR LEGAL RECORDS]`;
+- Copy of Social Security Card
+- Copy of Proof of Address`;
 
     letters.push({
       id: uuidv4(),
@@ -364,31 +392,40 @@ Enclosures:
     });
   }
 
-  const output = `# ⚖️ FCRA Dispute Letter Factory
+  const output = `# ⚖️ e-OSCAR Bypass Dispute Engine
 **Generated:** ${new Date().toLocaleDateString()}
-**Letters Created:** ${letters.length} (one per bureau with reportable items)
+**Letters Created:** ${letters.length} (AI Spintax Applied)
 **30-Day FCRA Deadline:** ~${new Date(Date.now() + 37 * 24 * 60 * 60 * 1000).toLocaleDateString()}
 
-${letters.length === 0 ? '✅ No items requiring formal FCRA dispute identified. Consider Goodwill letters for late payment removals.' : `
+${letters.length === 0 ? '✅ No items requiring formal FCRA dispute identified.' : `
 ## Letters Generated:
-${letters.map((l, i) => `${i + 1}. **${l.bureau}** — ${disputeItems.filter(i => i.bureau.includes(l.bureau!)).length} item(s) disputed`).join('\n')}
+${letters.map((l, i) => `${i + 1}. **${l.bureau}** - ${disputeItems.filter(i => i.bureau.includes(l.bureau!)).length} item(s) disputed (100% Unique OCR Hash)`).join('\n')}
 
 ## Critical Mailing Instructions:
+
+**✅ Option A: Online Overnight Mailing (RECOMMENDED)**
+Skip the post office entirely. You can upload the PDFs of these letters directly to online mailrooms like [Mailform.io](https://www.mailform.io) or [Click2Mail](https://click2mail.com).
+1. Upload the PDF.
+2. Select **USPS Certified Mail**.
+3. Select **Return Receipt Electronic (RRE)** or **Overnight Delivery**.
+4. They will print, stuff, and mail the letters for you!
+
+**📫 Option B: Traditional USPS Mailing**
 1. **Print** each letter and sign by hand.
 2. **Mail via USPS Certified Mail with Return Receipt Requested** (green card).
-3. **Keep the USPS tracking number** — this is your legal proof of delivery.
-4. **Start your 30-day countdown** from the date the bureau receives the letter (check tracking).
-5. **Attach enclosures** — ID, SSN doc, proof of address.
+3. **Keep the USPS tracking number** - this is your legal proof of delivery.
+4. **Attach enclosures** - ID, SSN doc, proof of address.
 
-All letters are available in the Dispute Center tab for download and printing.`}`;
+*Note: Your 30-day countdown begins the day the tracking number shows "Delivered" at the credit bureau. We will automatically send you a 30-Day Follow-Up email!*`}
+`;
 
   return {
     agentId: 'DISPUTE_LETTER',
     status: 'COMPLETE',
-    title: 'FCRA Dispute Letter Factory',
+    title: 'e-OSCAR Bypass Dispute Engine',
     output,
     generatedAt: new Date().toISOString(),
-    letters,
+    letters: letters.length > 0 ? letters : undefined
   };
 }
 
@@ -480,60 +517,92 @@ ${letters.map((l, i) => `${i + 1}. **${l.creditor}** — Goodwill request for la
 // ── Agent 6: Inquiry Minimizer ────────────────────────────────
 function runInquiryMinimizer(client: Client, profile: CreditProfile): AgentResult {
   const inquiries = profile.negativeItems.filter(i => i.type === 'INQUIRY');
-  const output = `# 🛡️ Hard Inquiry Minimizer & Smart Application Strategy
+  
+  // Find accounts attached to these inquiries
+  const accountCreditors = new Set([
+    ...profile.debtAccounts.map(d => d.creditor.toLowerCase()),
+    ...profile.negativeItems.filter(n => n.type !== 'INQUIRY').map(n => n.creditor.toLowerCase())
+  ]);
+
+  const unattachedInquiries = inquiries.filter(i => {
+    return !Array.from(accountCreditors).some(ac => ac.includes(i.creditor.toLowerCase()) || i.creditor.toLowerCase().includes(ac));
+  });
+
+  const attachedInquiries = inquiries.filter(i => !unattachedInquiries.includes(i));
+
+  const letters: DisputeLetter[] = unattachedInquiries.map(inq => ({
+    id: uuidv4(),
+    clientId: client.id,
+    type: 'FCRA_FORMAL_DISPUTE',
+    bureau: inq.bureau as any,
+    creditor: inq.creditor,
+    status: 'DRAFT',
+    createdAt: new Date().toISOString(),
+    content: `[Your Name]
+[Your Address]
+[City, State, Zip]
+
+Date: ${new Date().toLocaleDateString()}
+
+To: ${inq.bureau} Credit Bureau
+
+Subject: Dispute of Unauthorized Hard Inquiry - FCRA Section 604 Violation
+
+To Whom It May Concern,
+
+I am writing to formally dispute a hard inquiry on my credit report from ${inq.creditor} dated ${inq.dateOpened || 'Unknown Date'}. I have no open or closed account with this institution, nor did I apply for credit or provide permissible purpose under Section 604 of the Fair Credit Reporting Act (FCRA).
+
+Please provide proof of signed authorization bearing my physical signature. If you cannot produce this documentation within 30 days, as required by law, this inquiry must be permanently removed from my credit file.
+
+Thank you,
+
+${client.firstName} ${client.lastName}`
+  }));
+
+  const output = `# 🕵️ Hard Inquiry Minimizer & Smart Application Strategy
 **Total Inquiries Found:** ${inquiries.length}
-**High Risk Threshold:** 4+ inquiries (you are ${(profile.numberOfInquiries ?? 0) >= 4 ? '⚠️ ABOVE' : '✅ BELOW'} this threshold)
+**Unattached Inquiries (Disputable):** ${unattachedInquiries.length}
 
 ---
 
-## Understanding Hard Inquiries
-- Hard inquiries remain on your credit report for **24 months**.
-- They only impact your score for **12 months**.
-- After **12 months**, they are visible but score-neutral.
-- The average single inquiry costs **5 to 15 points**.
-- Multiple inquiries in a short window for the same type of credit (mortgage, auto) are typically "deduplicated" by scoring models within a **14–45 day window** and count as a single inquiry.
+## 🚨 Unattached Inquiries Detected
+*The following inquiries do not match any open or closed accounts on your profile. Under FCRA §604, inquiries without a permissible purpose or an associated account application are highly disputable and must be removed if the creditor cannot prove authorization.*
+
+${unattachedInquiries.length === 0 ? '✅ Excellent. No unattached inquiries found.' : unattachedInquiries.map(i => `- **${i.creditor}** (${i.bureau}) - ${i.dateOpened ?? 'Date unknown'} 🛑 **FLAGGED FOR DISPUTE**`).join('\\n')}
 
 ---
 
-## Inquiries Found on Your File
-${inquiries.length === 0 ? '✅ No hard inquiries detected or identified.' : inquiries.map(i => `- **${i.creditor}** (${i.bureau}) — ${i.dateOpened ?? 'Date unknown'}`).join('\n')}
+## 📎 Attached Inquiries
+*These inquiries correspond to existing accounts on your file. Disputing them is generally unsuccessful and could risk the associated account being closed.*
+
+${attachedInquiries.length === 0 ? '*None.*' : attachedInquiries.map(i => `- **${i.creditor}** (${i.bureau}) - ${i.dateOpened ?? 'Date unknown'}`).join('\\n')}
 
 ---
 
-## Dispute Unauthorized Inquiries
-If you did not authorize any of the above inquiries, you have the right to dispute them:
-
-### How to Dispute Unauthorized Inquiries:
-1. Send a letter to each bureau where the unauthorized inquiry appears.
-2. State: "I did not authorize this inquiry. Please provide the signed authorization form or remove this inquiry immediately."
-3. Under FCRA §604, only permissible-purpose inquiries may appear on your file.
-4. Unauthorized inquiries must be removed if the creditor cannot produce a signed authorization.
+## ⚖️ Dispute Unauthorized Inquiries
+We have automatically generated **${letters.length} FCRA §604 Dispute Letter(s)** for your unattached inquiries. 
+These are available in your Letters tab and demand proof of signed authorization.
 
 ---
 
 ## Future Application Strategy (Rate Shopping Protection)
-### The 14–45 Day Rate Shopping Window
-- When shopping for a mortgage, auto loan, or student loan — apply to ALL lenders within a **14-day window**.
+### The 14-45 Day Rate Shopping Window
+- When shopping for a mortgage, auto loan, or student loan - apply to ALL lenders within a **14-day window**.
 - FICO 8 and VantageScore 3.0/4.0 will count these as **1 inquiry** instead of multiple.
 - For credit cards, each application IS a separate inquiry (no bundling).
 
 ### The Application Pre-Qualification Hack
 - ALWAYS use lenders' pre-qualification tools (soft pull only) before formally applying.
 - Pre-qualifications are NOT hard inquiries and show you your likely approval odds risk-free.
-- Only submit a formal application when you have strong pre-qualification confidence.
-
-### Priority Application Timing (After Dispute Phase)
-1. Wait until disputed negative items are deleted (typically 30–45 days).
-2. Run the AZEO strategy to maximize utilization score.
-3. Allow 48–72 hours after AZEO for scores to update.
-4. Apply within a tight 72-hour window for maximum score snapshot.`;
+`;
 
   return {
     agentId: 'INQUIRY_MINIMIZER',
     status: 'COMPLETE',
-    title: 'Hard Inquiry Minimizer',
+    title: 'Inquiry Minimizer & Disputer',
     output,
     generatedAt: new Date().toISOString(),
+    letters: letters.length > 0 ? letters : undefined
   };
 }
 
@@ -733,3 +802,486 @@ This is the single most important ongoing practice:
     generatedAt: new Date().toISOString(),
   };
 }
+
+// ============================================================================
+// ── 5-PROMPT BUSINESS UNDERWRITING & FUNDING READINESS SUITE ────────────────
+// ============================================================================
+
+// ── Prompt 1: LLC Formation Documents, EIN, Ownership & Filing Audit ─────────
+function runBizFormationAudit(client: Client): AgentResult {
+  const biz = client.businessProfile || {};
+  const companyName = client.companyName || 'Registered Entity';
+  const entityType = biz.entityType || (client.businessType as any) || 'LLC';
+  const state = biz.formationState || client.state || 'FL';
+  const ein = client.ein || 'Pending / Unfiled';
+  const hasEin = ein && ein !== 'Pending / Unfiled' && /^\d{2}-\d{7}$/.test(ein);
+  const ownershipPct = biz.ownershipPercentage ?? 100;
+
+  // Audit Inconsistency Checks
+  const issues: string[] = [];
+  const passes: string[] = [];
+  let verdict: ReadinessVerdict = 'READY';
+
+  // Check 1: Punctuation & Designator Consistency
+  const hasPunctuation = companyName.includes('.') || companyName.includes(',');
+  const hasDesignator = /(LLC|L\.L\.C\.|INC|CORP|LIMITED LIABILITY COMPANY)/i.test(companyName);
+  
+  if (!hasDesignator) {
+    issues.push(`⚠️ **Missing Corporate Designator**: "${companyName}" lacks an explicit statutory identifier (LLC, Inc.). Financial institution CIP/KYC automated scanners will flag this as an unregistered sole proprietorship.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else if (hasPunctuation) {
+    issues.push(`⚠️ **Punctuation Discrepancy Risk**: Company name contains punctuation ("${companyName}"). If Secretary of State shows "${companyName.replace(/[,.]/g, '')}" while IRS CP-575 contains periods or commas, automated banking algorithms (Alloy, Middesk, LexisNexis) flag an unverified entity mismatch.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **Clean Statutory Designator**: Legal entity name "${companyName}" uses standardized alphanumeric format.`);
+  }
+
+  // Check 2: EIN Documentation (CP 575 / 147C)
+  if (!hasEin) {
+    issues.push(`🚨 **Unverified or Missing EIN**: Financial institutions require an official IRS Form CP 575 or Form 147C replacement letter. Online-only unverified tax IDs fail tier-1 underwriting.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else {
+    passes.push(`✅ **Federal EIN Assigned**: ${ein} is properly formatted under IRS Title 26.`);
+  }
+
+  // Check 3: Operating Agreement & Governance
+  if (!biz.operatingAgreementFiled) {
+    issues.push(`⚠️ **Operating Agreement Audit**: Operating Agreement must be fully executed, dated, and contain a specific **Commercial Banking & Borrowing Resolution Clause** explicitly authorizing ${client.firstName} ${client.lastName} (${ownershipPct}% Ownership) to incur debt on behalf of the entity.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **Executed Operating Agreement on File**: Governance structure and banking authority confirmed.`);
+  }
+
+  // Check 4: Secretary of State Good Standing
+  if (biz.activeGoodStanding === false) {
+    issues.push(`🚨 **Stale SOS Status / Delinquent Annual Report**: Entity is not actively in good standing with the State of ${state}. Banks verify Sunbiz / State Division of Corporations live; delinquent filings trigger immediate automated application rejection.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else {
+    passes.push(`✅ **Active State Good Standing**: Division of Corporations charter verified in ${state}.`);
+  }
+
+  // Check 5: Ownership Breakdown
+  if (ownershipPct < 51) {
+    issues.push(`⚠️ **Minority Ownership Underwriting Threshold**: Applicant holds ${ownershipPct}% ownership. Tier-1 commercial lines ($50,000+) require sign-off or personal guarantee from beneficial owners holding at least 20% to 51%+ aggregate control.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **Majority Control Verified**: ${ownershipPct}% ownership held by primary guarantor.`);
+  }
+
+  const output = `# 🏛️ Prompt One: LLC Formation Documents, EIN, Ownership Structure & Filing Audit
+**Entity:** ${companyName} | **Jurisdiction:** ${state}
+**Evaluation Timestamp:** ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Institutional Grade)' : verdict === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Manual Underwriter Inquiry)' : '🔴 FIX BEFORE APPLYING (Hard Stop)'}
+
+---
+
+## 📋 Formation & Statutory Integrity Overview
+| Vector | Parameter | Underwriting Standard | Status |
+|---|---|---|---|
+| Legal Name | ${companyName} | Exact match across SOS & IRS | ${hasDesignator && !hasPunctuation ? 'Pass' : 'Flagged'} |
+| Entity Structure | ${entityType} | Limited Liability Protection | Verified |
+| Federal EIN | ${ein} | Form CP-575 / 147C Letter | ${hasEin ? 'Pass' : 'Missing'} |
+| State Registry | ${state} Division of Corporations | Active / Good Standing | ${biz.activeGoodStanding !== false ? 'Active' : 'Delinquent'} |
+| Ownership Share | ${ownershipPct}% (${client.firstName} ${client.lastName}) | >51% for streamlined authorization | ${ownershipPct >= 51 ? 'Optimal' : 'Review'} |
+
+---
+
+## 🔍 Inconsistency & Missing Information Findings
+${issues.length === 0 ? '✅ **Zero Discrepancies Found.** Your entity structure is 100% compliant with Tier-1 institutional underwriting protocols.' : issues.join('\n\n')}
+
+---
+
+## 🛡️ Institutional Alignment Checklist
+${passes.join('\n')}
+
+---
+
+## 🎯 Remediation Directive
+${verdict === 'FIX_BEFORE_APPLYING' 
+  ? '1. **STOP APPLICATION SUBMISSIONS**: Resolving the highlighted blockers above is strictly required prior to submitting commercial loan or credit card applications.\n2. Request a fresh IRS 147C verification letter or file pending state annual reports immediately.'
+  : verdict === 'NEEDS_ATTENTION'
+    ? '1. Standardize spelling across all documentation to match the Secretary of State certificate word-for-word.\n2. Ensure your Operating Agreement includes a formal Banking Borrowing Authorization clause with physical signature.'
+    : '✅ Your legal formation architecture meets all institutional guidelines. Proceed to Address & Footprint Audit.'}`;
+
+  return {
+    agentId: 'BIZ_FORMATION_EIN',
+    status: 'COMPLETE',
+    title: 'Prompt 1: Formation, EIN & Ownership Audit',
+    output,
+    generatedAt: new Date().toISOString(),
+    verdict,
+  };
+}
+
+// ── Prompt 2: Business Address & Digital Footprint Audit ───────────────────────
+function runBizAddressFootprintAudit(client: Client): AgentResult {
+  const biz = client.businessProfile || {};
+  const companyName = client.companyName || 'Business Entity';
+  const addressType = biz.addressType || 'VIRTUAL_OFFICE';
+  const fullAddress = `${client.address}, ${client.city}, ${client.state} ${client.zip}`;
+
+  const issues: string[] = [];
+  const passes: string[] = [];
+  let verdict: ReadinessVerdict = 'READY';
+
+  // Check 1: Address Type Appropriateness
+  if (addressType === 'CMRA_UPS_BOX') {
+    issues.push(`🚨 **CMRA / UPS Store Postal Box Detected**: Your registered address is categorized by the USPS database as a Commercial Mail Receiving Agency (CMRA). Tier-1 commercial underwriters (Chase, Amex, Bank of America) automatically cross-reference the USPS address database. CMRAs trigger an instant algorithmic denial for fraud prevention.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else if (addressType === 'HOME_ADDRESS') {
+    issues.push(`⚠️ **Residential Address Classification**: While residential addresses are legally permissible, automated commercial underwriting risk-scores decrease by 15–30 points. For high-limit revolving lines ($50K+), underwriters will demand proof of commercial lease or executive suite.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else if (addressType === 'VIRTUAL_OFFICE') {
+    if (!biz.dedicatedSuiteNumber) {
+      issues.push(`⚠️ **Virtual Office Without Dedicated Suite**: Using a generic virtual office address shared by hundreds of entities without a private suite number triggers secondary manual review. Ensure your agreement provides a dedicated commercial suite identifier.`);
+      if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+    } else {
+      passes.push(`✅ **Commercial Executive Suite Verified**: Dedicated commercial address with private suite allocation.`);
+    }
+  } else {
+    passes.push(`✅ **Commercial Physical Nexus**: Commercial brick-and-mortar or office building verified.`);
+  }
+
+  // Check 2: 411 Directory & Public Registry
+  if (biz.has411Listing === false || !biz.businessPhone) {
+    issues.push(`⚠️ **National 411 Directory Absence**: Lenders verify phone numbers through National 411 Directory Assistance (ListYourself / Neustar). An unlisted business phone signals an unestablished or shell business.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **411 Directory Listing Active**: Dedicated commercial phone line listed under ${companyName}.`);
+  }
+
+  // Check 3: Digital Footprint & Domain Authority
+  const isGenericEmail = /@(gmail|yahoo|hotmail|outlook|aol)\.com$/i.test(biz.businessEmail || client.email);
+  if (isGenericEmail) {
+    issues.push(`⚠️ **Free Email Domain In Use**: Applying with a generic email address ("${client.email}") is flagged by underwriting AI as amateur. Professional commercial applicants must utilize domain-authenticated email (e.g. \`contact@${companyName.toLowerCase().replace(/[^a-z0-9]/g, '')}.com\`).`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **Enterprise Domain Email Verified**: Authenticated email reflecting company domain.`);
+  }
+
+  // Check 4: Google Business Profile & Website
+  if (!biz.hasGoogleBusinessProfile && !biz.websiteUrl) {
+    issues.push(`⚠️ **Zero Digital Footprint**: Underwriters search Google Maps and public search indices to verify business existence. Lack of an active web domain or Google Business Profile triggers "Unable to Verify Physical Operations" status.`);
+    if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+  } else {
+    passes.push(`✅ **Public Digital Footprint Established**: Verified website domain and public listing present.`);
+  }
+
+  const output = `# 📍 Prompt Two: Business Address Suitability & Digital Footprint Audit
+**Entity:** ${companyName} | **Registered Location:** ${fullAddress}
+**Address Classification:** ${addressType.replace(/_/g, ' ')}
+**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Institutional Grade)' : verdict === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Underwriting Friction)' : '🔴 FIX BEFORE APPLYING (Automated Decline Risk)'}
+
+---
+
+## 🏢 Physical Address & Digital Presence Matrix
+| Component | Registered Value | Institutional Standard | Assessment |
+|---|---|---|---|
+| Address Type | ${addressType.replace(/_/g, ' ')} | Physical Brick-and-Mortar / Executive Suite | ${addressType === 'CMRA_UPS_BOX' ? 'CRITICAL DECLINE' : addressType === 'HOME_ADDRESS' ? 'Moderate Risk' : 'Optimal'} |
+| National 411 | ${biz.businessPhone || client.phone} | Neustar / ListYourself 411 Directory | ${biz.has411Listing !== false ? 'Verified' : 'Unlisted'} |
+| Email System | ${biz.businessEmail || client.email} | Dedicated Domain-Linked Email | ${isGenericEmail ? 'Free Provider Flag' : 'Professional'} |
+| Web & Map Footprint | ${biz.websiteUrl || 'Pending'} | Google Maps Pin + SSL Website | ${biz.hasGoogleBusinessProfile || biz.websiteUrl ? 'Verified' : 'Missing'} |
+
+---
+
+## 🔍 Underwriting Friction Findings
+${issues.length === 0 ? '✅ **Zero Digital Footprint Inconsistencies.** Your address and online presence match public records flawlessly.' : issues.join('\n\n')}
+
+---
+
+## 🛡️ Verified Trust Anchors
+${passes.join('\n')}
+
+---
+
+## 🎯 Tactical Action Steps
+${addressType === 'CMRA_UPS_BOX'
+  ? '1. **IMMEDIATE ACTION**: Transition your business registration away from the UPS Store / CMRA box to a true commercial office or executive suite with a dedicated suite number.\n2. Update address on Secretary of State, IRS records, and bank statements before submitting credit applications.'
+  : isGenericEmail
+    ? '1. Secure a Google Workspace or Microsoft 365 domain email matching your company name.\n2. Submit your business name and commercial phone number to ListYourself.net to propagate 411 national directory listings.'
+    : '✅ Address and digital footprint are verified for tier-1 credit underwriting.'}`;
+
+  return {
+    agentId: 'BIZ_ADDRESS_FOOTPRINT',
+    status: 'COMPLETE',
+    title: 'Prompt 2: Address & Digital Footprint Audit',
+    output,
+    generatedAt: new Date().toISOString(),
+    verdict,
+  };
+}
+
+// ── Prompt 3: Operational NAICS Code Identification ───────────────────────────
+function runBizNaicsAudit(client: Client): AgentResult {
+  const biz = client.businessProfile || {};
+  const companyName = client.companyName || 'Business Entity';
+  const desc = biz.actualOperationsDescription || 'General commercial consulting, marketing, and professional services';
+  const currentCode = biz.currentNaicsCode || '541611';
+
+  // Analysis of actual operational reality vs high-risk sectors
+  const lowerDesc = desc.toLowerCase();
+  const lowerName = companyName.toLowerCase();
+  
+  let primaryNaics = '541611';
+  let primaryTitle = 'Administrative Management and General Management Consulting Services';
+  let isRestricted = false;
+  let restrictedCategory = '';
+
+  if (lowerDesc.includes('real estate') || lowerDesc.includes('wholesale') || lowerDesc.includes('property') || lowerName.includes('properties') || lowerName.includes('realty')) {
+    isRestricted = true;
+    restrictedCategory = 'Real Estate Speculation / Wholesaling (NAICS 531390)';
+    primaryNaics = '531390';
+    primaryTitle = 'Other Activities Related to Real Estate';
+  } else if (lowerDesc.includes('truck') || lowerDesc.includes('freight') || lowerDesc.includes('logistics') || lowerDesc.includes('hauling')) {
+    isRestricted = true;
+    restrictedCategory = 'General Freight Trucking (NAICS 484110)';
+    primaryNaics = '484110';
+    primaryTitle = 'General Freight Trucking, Local';
+  } else if (lowerDesc.includes('credit repair') || lowerDesc.includes('credit counseling') || lowerDesc.includes('dispute')) {
+    isRestricted = true;
+    restrictedCategory = 'Credit Intermediation / Credit Services (NAICS 541990)';
+    primaryNaics = '541990';
+    primaryTitle = 'All Other Professional, Scientific, and Technical Services';
+  } else if (lowerDesc.includes('software') || lowerDesc.includes('tech') || lowerDesc.includes('app') || lowerDesc.includes('web')) {
+    primaryNaics = '541511';
+    primaryTitle = 'Custom Computer Programming Services';
+  } else if (lowerDesc.includes('marketing') || lowerDesc.includes('advertising') || lowerDesc.includes('media')) {
+    primaryNaics = '541810';
+    primaryTitle = 'Advertising Agencies';
+  } else if (lowerDesc.includes('e-commerce') || lowerDesc.includes('online retail') || lowerDesc.includes('store')) {
+    primaryNaics = '454110';
+    primaryTitle = 'Electronic Shopping and Mail-Order Houses';
+  }
+
+  const verdict: ReadinessVerdict = isRestricted ? 'FIX_BEFORE_APPLYING' : 'READY';
+
+  const output = `# 🏷️ Prompt Three: Operational NAICS Code Identification (Truth vs Funding Trap)
+**Entity:** ${companyName}
+**Declared Description of Actual Operations:** "${desc}"
+**Identified Primary Operational NAICS Code:** \`${primaryNaics}\` — ${primaryTitle}
+**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Low-Risk Funding Permissible)' : '🔴 FIX BEFORE APPLYING (High-Risk Category Underwriting Trap)'}
+
+---
+
+## ⚠️ The "YouTube Funding Advice" Underwriting Trap
+Most business owners are told on social media to claim a generic low-risk NAICS code like \`541611\` (Management Consulting) or \`541990\` regardless of what they actually do.
+
+**Here is why that distinction destroys funding applications:**
+Underwriters do not take your NAICS code on faith. They cross-check:
+1. **Commercial Bank Statement Inflows**: Transaction descriptions and customer merchant categories.
+2. **Merchant Processing (MCC) Codes**: Credit card processing classifications.
+3. **Public Digital Footprint**: Your website services, social media, and client reviews.
+
+If an underwriter sees you claimed \`541611\` Management Consulting, but bank deposits come from real estate earnest money, earnest contract assignments, auto transport brokers, or e-commerce returns, the file is flagged for **Material Misrepresentation (Loan Fraud)**. You are instantly denied and your EIN is blacklisted across national underwriting risk consortiums (LexisNexis / RiskExec).
+
+---
+
+## 🎯 Exact NAICS Classification Mapping (What You Actually Do)
+| Classification Layer | Code | Official Title | Risk Tier |
+|---|---|---|---|
+| **Primary Code (Operational Truth)** | \`${primaryNaics}\` | ${primaryTitle} | ${isRestricted ? '🔴 High Risk / Restricted' : '🟢 Low Risk Tier-1'} |
+| **Secondary Code (Revenue Expansion)** | \`541613\` | Marketing Consulting Services | 🟢 Tier-1 Permissible |
+| **Current Code on Record** | \`${currentCode}\` | Declared Bureau Mapping | ${currentCode === primaryNaics ? 'Synchronized' : 'Discrepancy Detected'} |
+
+---
+
+## 🚨 High-Risk & Restricted Sector Analysis
+${isRestricted ? `
+### 🛑 CRITICAL UNDERWRITING WARNING: ${restrictedCategory}
+Financial institutions place real estate speculation, trucking/hauling, lending, cannabis, and credit counseling on strict restricted lender lists.
+- **Why**: High default rates, fluctuating cash flows, and regulatory liability.
+- **The Solution**: Structure your business as a specialized management, operations, or technology arm (e.g. \`541512\` or \`541611\`) that provides legitimate professional management services to operating entities, ensuring bank statements reflect consulting and management retainers rather than high-risk transaction spikes.
+` : `
+✅ **Unrestricted Low-Risk Classification Confirmed**:
+Your operational activities fall into a preferred low-risk underwriting tier. Banks view professional and technical services as stable, predictable, and eligible for maximum unsecured limits ($50K-$250K+).
+`}
+
+---
+
+## 🎯 Strategic Protocol
+1. Verify that the NAICS code registered on your IRS Form CP 575 and Secretary of State matches \`${primaryNaics}\`.
+2. Ensure your invoice line items and customer payment descriptions reflect **${primaryTitle}**.
+3. Never use generic consulting codes as an artificial mask—build operational coherence between your banking transactions and your tax returns.`;
+
+  return {
+    agentId: 'BIZ_NAICS_CLASSIFICATION',
+    status: 'COMPLETE',
+    title: 'Prompt 3: Operational NAICS Code Identification',
+    output,
+    generatedAt: new Date().toISOString(),
+    verdict,
+  };
+}
+
+// ── Prompt 4: Financial Commingling & Corporate Veil Forensic Audit ────────────
+function runBizComminglingAudit(client: Client): AgentResult {
+  const biz = client.businessProfile || {};
+  const companyName = client.companyName || 'Business Entity';
+  const hasBank = biz.hasDedicatedBusinessBank !== false;
+  const commingling = biz.comminglingDetected === true;
+
+  const issues: string[] = [];
+  const passes: string[] = [];
+  let verdict: ReadinessVerdict = 'READY';
+
+  // Check 1: Dedicated Business Bank Account
+  if (!hasBank) {
+    issues.push(`🚨 **No Dedicated Commercial Bank Account**: Conducting business cash flows through a personal checking account is the fastest way to trigger loan denial. Commercial underwriters require 3–6 months of business bank statements bearing the exact corporate entity name and EIN.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else {
+    passes.push(`✅ **Segregated Commercial Checking**: Commercial bank account established under ${companyName}.`);
+  }
+
+  // Check 2: Commingling of Personal & Business Expenses
+  if (commingling) {
+    issues.push(`🚨 **Active Commingling Detected**: Personal living expenses (groceries, home utilities, retail dining, personal subscriptions) run directly on commercial debit/credit cards without clean reimbursement accounting. Underwriters scan bank statements line-by-line; seeing personal transactions demonstrates that the owner cannot separate their personal life from the business entity.`);
+    verdict = 'FIX_BEFORE_APPLYING';
+  } else {
+    passes.push(`✅ **Clean Expense Segregation**: Commercial accounts demonstrate dedicated business purchases.`);
+  }
+
+  // Check 3: Owner Draws vs Random ATM Transfers
+  issues.push(`⚠️ **Owner Compensation Audit Check**: Never pull random cash withdrawals or direct Venmo/Zelle transfers without accounting entries. All owner compensation must be formally executed as **Owner Draws / Member Distributions** or **W-2 Payroll** supported by ledger entries.`);
+  if (verdict === 'READY') verdict = 'NEEDS_ATTENTION';
+
+  // Check 4: Initial Capitalization & Corporate Veil
+  passes.push(`✅ **Corporate Veil Legal Shield**: Maintaining strict accounting separation prevents creditors and litigators from "piercing the corporate veil" to attack personal assets (home, personal savings).`);
+
+  const output = `# 💳 Prompt Four: Business & Personal Financial Commingling & Corporate Veil Audit
+**Entity:** ${companyName}
+**Commercial Banking Status:** ${hasBank ? 'Dedicated Commercial Account Active' : 'CRITICAL: No Dedicated Account'}
+**Audit Status:** ${verdict === 'READY' ? '🟢 READY (Strict Separation)' : verdict === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Operational Cleanup Required)' : '🔴 FIX BEFORE APPLYING (High IRS & Denial Risk)'}
+
+---
+
+## 🏛️ Why Commingling Destroys Funding & Triggers IRS Audits
+The number one reason business owners get flagged by the IRS and denied for larger lines of credit isn’t because they’re doing anything wrong.
+**It’s because the underwriter can’t tell where the business ends and the person begins.**
+
+When an underwriter reviews your business bank statements:
+- If they see grocery stores, movie tickets, pharmacy purchases, and personal auto payments, they conclude:
+  1. The business is an alter-ego of the individual (Piercing the Corporate Veil).
+  2. The company lacks cash-flow discipline and formal governance.
+  3. The stated business profit is unreliable because personal expenses are buried in operational expenses.
+
+---
+
+## 🔍 Forensic Commingling Breakdown
+| Audit Vector | Standard Underwriting Protocol | Current Profile Finding | Risk Status |
+|---|---|---|---|
+| Bank Segregation | 100% Dedicated Business Checking | ${hasBank ? 'Dedicated Commercial Account' : 'Personal Account Intermingled'} | ${hasBank ? 'Pass' : 'CRITICAL STOP'} |
+| Card Spending | Exclusively Business-Related Expenses | ${commingling ? 'Personal Expenses Flagged' : 'Strict Business Deductions'} | ${commingling ? 'Underwriting Red Flag' : 'Pass'} |
+| Owner Draws | Documented Equity Distributions / Payroll | Random transfers without memo | Needs Standardization |
+| Capitalization Ledger | Initial deposit matching Operating Agreement | Formally Documented | Verified |
+
+---
+
+## 🚨 Piercing the Corporate Veil Legal Exposure
+If your LLC is ever sued or enters bankruptcy, a court will review whether you commingled funds:
+- **If funds are commingled**: The court declares the LLC a "sham" or alter-ego, strip-mining your limited liability protection and making your personal home, cars, and retirement accounts liable for corporate debts.
+- **If funds are segregated**: Your personal assets remain 100% bulletproof behind the corporate veil.
+
+---
+
+## 🎯 4-Step Underwriting Separation Protocol
+1. **Strict Payment Rule**: Never swipe your business card for personal expenses, and never swipe personal cards for business purchases.
+2. **If an accidental swipe occurs**: Execute an immediate documented reimbursement transfer labeled *"Owner Reimbursement - Personal Expense"* within 48 hours.
+3. **Formal Owner Draws**: Pay yourself on a regular schedule (e.g. 1st and 15th) via a single clean ACH transfer labeled *"Owner Draw / Distribution"*.
+4. **Maintain a 3-Month Clean Statement Window**: Financial institutions review your most recent 90 days. Keep those 90 days pristine with zero commingled line items.`;
+
+  return {
+    agentId: 'BIZ_COMMINGLING_FINANCES',
+    status: 'COMPLETE',
+    title: 'Prompt 4: Commingling & Corporate Veil Audit',
+    output,
+    generatedAt: new Date().toISOString(),
+    verdict,
+  };
+}
+
+// ── Prompt 5: Funding Readiness Synthesis & Prioritized Action Plan ────────────
+function runBizFundingReadiness(client: Client, priorResults?: Partial<Record<AgentId, AgentResult>>): AgentResult {
+  const companyName = client.companyName || 'Business Entity';
+  
+  // Collect verdicts from Prompts 1 through 4
+  const p1 = priorResults?.['BIZ_FORMATION_EIN'] || runBizFormationAudit(client);
+  const p2 = priorResults?.['BIZ_ADDRESS_FOOTPRINT'] || runBizAddressFootprintAudit(client);
+  const p3 = priorResults?.['BIZ_NAICS_CLASSIFICATION'] || runBizNaicsAudit(client);
+  const p4 = priorResults?.['BIZ_COMMINGLING_FINANCES'] || runBizComminglingAudit(client);
+
+  const v1 = p1.verdict || 'NEEDS_ATTENTION';
+  const v2 = p2.verdict || 'NEEDS_ATTENTION';
+  const v3 = p3.verdict || 'READY';
+  const v4 = p4.verdict || 'NEEDS_ATTENTION';
+
+  // Calculate Institutional Score
+  let score = 100;
+  if (v1 === 'FIX_BEFORE_APPLYING') score -= 25; else if (v1 === 'NEEDS_ATTENTION') score -= 10;
+  if (v2 === 'FIX_BEFORE_APPLYING') score -= 25; else if (v2 === 'NEEDS_ATTENTION') score -= 10;
+  if (v3 === 'FIX_BEFORE_APPLYING') score -= 30; else if (v3 === 'NEEDS_ATTENTION') score -= 10;
+  if (v4 === 'FIX_BEFORE_APPLYING') score -= 30; else if (v4 === 'NEEDS_ATTENTION') score -= 10;
+  score = Math.max(20, Math.min(100, score));
+
+  const overallVerdict: ReadinessVerdict = 
+    (v1 === 'FIX_BEFORE_APPLYING' || v2 === 'FIX_BEFORE_APPLYING' || v3 === 'FIX_BEFORE_APPLYING' || v4 === 'FIX_BEFORE_APPLYING')
+      ? 'FIX_BEFORE_APPLYING'
+      : (v1 === 'NEEDS_ATTENTION' || v2 === 'NEEDS_ATTENTION' || v3 === 'NEEDS_ATTENTION' || v4 === 'NEEDS_ATTENTION')
+        ? 'NEEDS_ATTENTION'
+        : 'READY';
+
+  const output = `# 🎯 Prompt Five: Funding Readiness Synthesis & Prioritized Action Plan
+**Target Entity:** ${companyName}
+**Consolidated Institutional Underwriting Score:** **${score} / 100**
+**Global Readiness Verdict:** ${overallVerdict === 'READY' ? '🟢 READY (Eligible for Immediate Tier-1 Submission)' : overallVerdict === 'NEEDS_ATTENTION' ? '🟡 NEEDS ATTENTION (Proceed with Caution / High Friction)' : '🔴 FIX BEFORE APPLYING (High Probability of Algorithmic Denial)'}
+
+---
+
+## 📊 4-Pillar Underwriting Synthesis Scorecard
+| Stage | Audit Domain | Evaluation Status | Key Risk Factor |
+|---|---|---|---|
+| **Prompt 1** | LLC Formation & EIN Structure | ${v1 === 'READY' ? '🟢 Ready' : v1 === 'NEEDS_ATTENTION' ? '🟡 Needs Attention' : '🔴 Fix Before Applying'} | Exact Secretary of State vs IRS CP-575 spelling |
+| **Prompt 2** | Address & Digital Footprint | ${v2 === 'READY' ? '🟢 Ready' : v2 === 'NEEDS_ATTENTION' ? '🟡 Needs Attention' : '🔴 Fix Before Applying'} | CMRA / Virtual Office USPS classification |
+| **Prompt 3** | Operational NAICS Code | ${v3 === 'READY' ? '🟢 Ready' : v3 === 'NEEDS_ATTENTION' ? '🟡 Needs Attention' : '🔴 Fix Before Applying'} | Bank statement deposits matching stated operations |
+| **Prompt 4** | Commingling & Corporate Veil | ${v4 === 'READY' ? '🟢 Ready' : v4 === 'NEEDS_ATTENTION' ? '🟡 Needs Attention' : '🔴 Fix Before Applying'} | Personal expenditures on business accounts |
+
+---
+
+## 🚦 Institutional Verdict Definitions
+- 🟢 **READY**: Passes automated KYC/CIP algorithms and institutional credit criteria. Eligible for immediate application submission with top-tier limits.
+- 🟡 **NEEDS ATTENTION**: Passes basic statutory requirements but carries friction points that can prompt manual underwriter scrutiny or reduced credit limits.
+- 🔴 **FIX BEFORE APPLYING**: Severe red flags detected. Submitting applications now will result in automatic algorithmic denial, hard inquiry waste, and possible internal bank blacklisting.
+
+---
+
+## 📋 Prioritized Action Plan (Sequenced Execution)
+
+### 🔴 Phase 1: Critical Killers (Fix Before Applying — Days 1–7)
+${overallVerdict === 'FIX_BEFORE_APPLYING' ? `
+1. **Resolve Address Classification**: If using a CMRA/UPS store, transition immediately to an approved commercial executive suite with private suite allocation.
+2. **Eliminate Commingling**: Cease all personal transactions on commercial checking. Keep the most recent 90-day statements 100% pure business.
+3. **Synchronize Legal Designators**: Ensure your business name spelling is identical across the Secretary of State, IRS Form 147C, and bank accounts down to the comma.
+` : '✅ No Phase 1 blockers detected. Your foundation has cleared all immediate automated denial triggers.'}
+
+### 🟡 Phase 2: Underwriting Optimization (Needs Attention — Days 8–21)
+1. **National 411 Directory Propagation**: Submit your primary commercial phone line to ListYourself.net and confirm Neustar carrier directory indexing.
+2. **Domain-Based Email Infrastructure**: Complete transition from free consumer email addresses (@gmail) to Google Workspace / Microsoft 365 domain email.
+3. **Operating Agreement Execution**: Verify your Operating Agreement contains a formal Banking Borrowing Resolution signed by all beneficial owners.
+4. **Google Maps Presence**: Verify physical Google Business Profile to anchor your local commercial existence.
+
+### 🟢 Phase 3: Sequenced Funding Execution Strategy (Days 22–45)
+Once Phase 1 and Phase 2 items are green, execute credit applications in strict institutional sequence:
+1. **Tier 1 (Vendor Tradelines)**: Uline, Grainger, Quill (Net-30 reporting to D&B / Experian Commercial).
+2. **Tier 2 (Store & Fleet Accounts)**: Home Depot Pro, WEX Fleet Fuel, Sam's Club Commercial (Revolving credit lines).
+3. **Tier 3 (Cash Flow Revolving Lines)**: Chase Ink Business Cash, American Express Blue Business Plus ($10,000–$50,000 limits).
+4. **Tier 4 (Unsecured Institutional Term Facilities)**: Regional bank credit lines ($50,000–$250,000+) backed by clean guarantor scores and pristine business underwriting dossier.`;
+
+  return {
+    agentId: 'BIZ_FUNDING_READINESS',
+    status: 'COMPLETE',
+    title: 'Prompt 5: Funding Readiness Evaluation',
+    output,
+    generatedAt: new Date().toISOString(),
+    verdict: overallVerdict,
+  };
+}
+

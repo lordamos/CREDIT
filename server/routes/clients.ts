@@ -2,7 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getAllClients, getClientById, saveClient, deleteClient, getClientByToken } from '../core/dataStore.js';
 import { dispatchEmail, getClientsNeedingOverdueAlert, getClientsNeedingPostCare } from '../core/emailScheduler.js';
-import { runAllAgents } from '../core/agentRunner.js';
+import { runAllAgents, runAllBusinessAudits, runAgent } from '../core/agentRunner.js';
 import { parseReport } from '../core/reportParser.js';
 import type { Client, PricingPlan, PipelineStage } from '../../shared/types/credit.js';
 
@@ -153,7 +153,7 @@ clientRouter.post('/:id/advance', async (req, res) => {
   res.json({ success: true, data: client });
 });
 
-// POST run all 8 agents for a client
+// POST run all agents (credit + business)
 clientRouter.post('/:id/run-agents', async (req, res) => {
   const client = getClientById(req.params.id);
   if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
@@ -167,6 +167,52 @@ clientRouter.post('/:id/run-agents', async (req, res) => {
   client.agentOutputs = { ...client.agentOutputs, ...outputs };
   client.disputes = [...client.disputes, ...newDisputes];
   client.stage = 'DOCS_VERIFIED';
+  
+  if (newDisputes.length > 0) {
+    const entry = await dispatchEmail(client, 'LETTERS_READY');
+    client.emailLog.push(entry);
+  }
+  
+  saveClient(client);
+  res.json({ success: true, data: client });
+});
+
+// POST run 5-Prompt Business Underwriting & Funding Readiness Engine
+clientRouter.post('/:id/run-business-audit', async (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  // Update business profile if passed in body
+  if (req.body && Object.keys(req.body).length > 0) {
+    client.businessProfile = { ...(client.businessProfile || {}), ...req.body };
+  }
+
+  const outputs = await runAllBusinessAudits(client);
+  client.agentOutputs = { ...client.agentOutputs, ...outputs };
+  saveClient(client);
+  res.json({ success: true, data: client, auditOutputs: outputs });
+});
+
+// POST run single specific agent (credit or business prompt)
+clientRouter.post('/:id/run-agent/:agentId', async (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  const agentId = req.params.agentId as any;
+  const result = await runAgent(client, agentId);
+  client.agentOutputs = { ...client.agentOutputs, [agentId]: result };
+  if (result.letters && result.letters.length > 0) {
+    client.disputes = [...client.disputes, ...result.letters];
+  }
+  saveClient(client);
+  res.json({ success: true, data: client, result });
+});
+
+// POST update business profile parameters
+clientRouter.post('/:id/business-profile', async (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+  client.businessProfile = { ...(client.businessProfile || {}), ...req.body };
   saveClient(client);
   res.json({ success: true, data: client });
 });
@@ -275,6 +321,12 @@ clientRouter.post('/:id/parse-and-run', async (req, res) => {
   client.agentOutputs = { ...client.agentOutputs, ...outputs };
   client.disputes = [...(client.disputes ?? []), ...newDisputes];
   if (client.stage === 'NEW') client.stage = 'DOCS_VERIFIED';
+  
+  if (newDisputes.length > 0) {
+    const entry = await dispatchEmail(client, 'LETTERS_READY');
+    client.emailLog.push(entry);
+  }
+  
   saveClient(client);
 
   res.json({

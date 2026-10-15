@@ -23,7 +23,47 @@ export type AgentId =
   | 'GOODWILL_LETTER'
   | 'INQUIRY_MINIMIZER'
   | 'SECONDARY_FREEZE'
-  | 'CREDIT_GROWTH';
+  | 'CREDIT_GROWTH'
+  // ── 5-Prompt Business Underwriting & Funding Readiness Engine ──
+  | 'BIZ_FORMATION_EIN'
+  | 'BIZ_ADDRESS_FOOTPRINT'
+  | 'BIZ_NAICS_CLASSIFICATION'
+  | 'BIZ_COMMINGLING_FINANCES'
+  | 'BIZ_FUNDING_READINESS';
+
+export type AddressType =
+  | 'BRICK_AND_MORTAR'
+  | 'EXECUTIVE_SUITE'
+  | 'VIRTUAL_OFFICE'
+  | 'HOME_ADDRESS'
+  | 'CMRA_UPS_BOX';
+
+export type ReadinessVerdict = 'READY' | 'NEEDS_ATTENTION' | 'FIX_BEFORE_APPLYING';
+
+export interface BusinessProfile {
+  formationState?: string;
+  formationYear?: number;
+  entityType?: 'LLC' | 'C-Corp' | 'S-Corp' | 'Sole Proprietor' | 'Partnership';
+  operatingAgreementFiled?: boolean;
+  activeGoodStanding?: boolean;
+  einLetterStatus?: 'VERIFIED_CP575' | 'VERIFIED_147C' | 'ONLINE_CONFIRMATION' | 'UNVERIFIED';
+  ownershipPercentage?: number;
+  addressType?: AddressType;
+  dedicatedSuiteNumber?: string;
+  websiteUrl?: string;
+  businessEmail?: string;
+  businessPhone?: string;
+  has411Listing?: boolean;
+  hasGoogleBusinessProfile?: boolean;
+  actualOperationsDescription?: string;
+  currentNaicsCode?: string;
+  hasDedicatedBusinessBank?: boolean;
+  businessBankName?: string;
+  monthsInBusiness?: number;
+  averageMonthlyRevenue?: number;
+  comminglingDetected?: boolean;
+  comminglingNotes?: string;
+}
 
 export type AgentStatus = 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR';
 
@@ -34,6 +74,7 @@ export interface AgentResult {
   output: string;
   generatedAt?: string;
   letters?: DisputeLetter[];
+  verdict?: ReadinessVerdict;
 }
 
 export type DisputeType =
@@ -65,7 +106,9 @@ export type EmailStage =
   | 'APPROVED'
   | 'PAYMENT_CONFIRMED'
   | 'OVERDUE_48H'
-  | 'POST_CARE_45DAY';
+  | 'POST_CARE_45DAY'
+  | 'LETTERS_READY'
+  | 'DISPUTE_30DAY_FOLLOWUP';
 
 export interface EmailLogEntry {
   id: string;
@@ -146,10 +189,12 @@ export interface Client {
   companyName: string;
   ein?: string;
   businessType?: string;
+  businessProfile?: BusinessProfile;
   // Contract
   plan: PricingPlan;
   stage: PipelineStage;
   signedAt?: string;
+  approvedAt?: string;
   intakeToken: string; // unique URL token for public intake form
   // Credit Data
   creditProfile: CreditProfile;
@@ -212,6 +257,12 @@ export const AGENT_META: Record<AgentId, { title: string; icon: string; descript
   INQUIRY_MINIMIZER: { title: 'Hard Inquiry Minimizer', icon: '🛡️', description: 'Inquiry damage control & timing strategy' },
   SECONDARY_FREEZE: { title: 'Secondary Bureau Freeze Engine', icon: '🔒', description: 'LexisNexis, SageStream & Innovis freeze guide' },
   CREDIT_GROWTH: { title: 'Credit Growth Architect', icon: '📈', description: '1% utilization strategy & credit-builder roadmap' },
+  // ── 5-Prompt Business Underwriting & Funding Readiness Engine ──
+  BIZ_FORMATION_EIN: { title: 'LLC Formation & EIN Audit', icon: '🏛️', description: 'Prompt 1: Articles, EIN CP575, ownership & SOS registry consistency' },
+  BIZ_ADDRESS_FOOTPRINT: { title: 'Address & Digital Footprint', icon: '📍', description: 'Prompt 2: Address type industry fit, Google profile & 411 registry' },
+  BIZ_NAICS_CLASSIFICATION: { title: 'Operational NAICS Code', icon: '🏷️', description: 'Prompt 3: Actual operations classification vs underwriter risk trap' },
+  BIZ_COMMINGLING_FINANCES: { title: 'Commingling & Corporate Veil', icon: '💳', description: 'Prompt 4: Forensic personal vs business funds & IRS/veil protection' },
+  BIZ_FUNDING_READINESS: { title: 'Funding Readiness Evaluation', icon: '🎯', description: 'Prompt 5: Synthesis score, Ready/Attention/Fix badges & action plan' },
 };
 
 export const EMAIL_STAGE_META: Record<EmailStage, { subject: string; trigger: string; icon: string }> = {
@@ -222,4 +273,6 @@ export const EMAIL_STAGE_META: Record<EmailStage, { subject: string; trigger: st
   PAYMENT_CONFIRMED: { subject: 'Payment Confirmed: Card Activation & 1% Utilization Guide', trigger: 'On payment received', icon: '💳' },
   OVERDUE_48H: { subject: 'URGENT NOTICE: Outstanding Success Fee – Action Required', trigger: '48hrs after approval if unpaid', icon: '⚠️' },
   POST_CARE_45DAY: { subject: '45-Day Check-In: Scaling Your Lines to $50,000+', trigger: '45 days after payment', icon: '🚀' },
+  LETTERS_READY: { subject: 'Action Required', trigger: 'On gen', icon: 'x' },
+  DISPUTE_30DAY_FOLLOWUP: { subject: '30 days', trigger: '30 days', icon: 'x' },
 };

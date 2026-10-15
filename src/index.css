@@ -2,30 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Surface Elevation & Border Tokens */
+:root {
+  /* Hairline highlight along top edge to mimic beveling */
+  --lux-inner-bevel: inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+
+  /* Subtle backdrops */
+  --lux-glass-blur: blur(16px);
+  --lux-surface-glass: rgba(17, 17, 21, 0.72);
+
+  /* Elevation Shadows */
+  --lux-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --lux-shadow-md: 0 8px 24px -4px rgba(0, 0, 0, 0.6), var(--lux-inner-bevel);
+  --lux-shadow-lg: 0 16px 40px -8px rgba(0, 0, 0, 0.8), var(--lux-inner-bevel);
+
+  /* Metallic Radial Glows */
+  --lux-glow-gold: 0 0 32px -4px rgba(217, 183, 121, 0.18);
+  --lux-glow-indigo: 0 0 32px -4px rgba(99, 102, 241, 0.22);
+}
+
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    @apply bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   * { box-sizing: border-box; }
 }
 
 @layer utilities {
-  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
-  .scrollbar-thin::-webkit-scrollbar-track { @apply bg-slate-900; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-slate-600 rounded-full; }
+  /* Glassmorphism surfaces enhanced with Luxury Elevation Tokens */
+  .glass-panel {
+    background: var(--lux-surface-glass);
+    backdrop-filter: var(--lux-glass-blur);
+    -webkit-backdrop-filter: var(--lux-glass-blur);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: var(--lux-shadow-md);
+  }
+  
+  .glass-card {
+    background: linear-gradient(145deg, rgba(26, 26, 34, 0.7), rgba(15, 15, 20, 0.85));
+    backdrop-filter: var(--lux-glass-blur);
+    -webkit-backdrop-filter: var(--lux-glass-blur);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: var(--lux-shadow-md);
+  }
+
+  .glass-card-hover {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(99, 102, 241, 0.35);
+    transform: translateY(-2px);
+    box-shadow: var(--lux-shadow-lg), var(--lux-glow-indigo);
+  }
+
+  /* Luxury utility classes */
+  .lux-bevel {
+    box-shadow: var(--lux-inner-bevel);
+  }
+  .lux-shadow-sm {
+    box-shadow: var(--lux-shadow-sm);
+  }
+  .lux-shadow-md {
+    box-shadow: var(--lux-shadow-md);
+  }
+  .lux-shadow-lg {
+    box-shadow: var(--lux-shadow-lg);
+  }
+
+  .glow-indigo {
+    box-shadow: var(--lux-glow-indigo);
+  }
+  .glow-gold {
+    box-shadow: var(--lux-glow-gold);
+  }
+  .glow-emerald {
+    box-shadow: 0 0 32px -4px rgba(16, 185, 129, 0.22);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+  .scrollbar-thin::-webkit-scrollbar-track { @apply bg-slate-950; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-slate-700/60 rounded-full hover:bg-slate-600; }
+
   .prose-crm { @apply text-sm text-slate-300 leading-relaxed; }
-  .prose-crm h1 { @apply text-xl font-bold text-white mb-4 mt-6; }
-  .prose-crm h2 { @apply text-lg font-semibold text-blue-300 mb-3 mt-5; }
+  .prose-crm h1 { @apply text-xl font-bold text-white mb-4 mt-6 tracking-tight; }
+  .prose-crm h2 { @apply text-lg font-semibold text-indigo-300 mb-3 mt-5; }
   .prose-crm h3 { @apply text-base font-semibold text-slate-200 mb-2 mt-4; }
-  .prose-crm p { @apply mb-3; }
-  .prose-crm ul { @apply list-disc pl-5 mb-3 space-y-1; }
+  .prose-crm p { @apply mb-3 text-slate-300; }
+  .prose-crm ul { @apply list-disc pl-5 mb-3 space-y-1 text-slate-300; }
   .prose-crm li { @apply text-slate-300; }
   .prose-crm strong { @apply text-white font-semibold; }
   .prose-crm table { @apply w-full text-sm mb-4 border-collapse; }
-  .prose-crm th { @apply bg-slate-800 text-slate-300 font-semibold px-3 py-2 text-left border border-slate-700; }
-  .prose-crm td { @apply px-3 py-2 border border-slate-800 text-slate-300; }
-  .prose-crm code { @apply bg-slate-800 text-blue-300 px-1 py-0.5 rounded text-xs; }
-  .prose-crm hr { @apply border-slate-700 my-4; }
-  .prose-crm blockquote { @apply border-l-4 border-blue-500 pl-4 text-slate-400 italic my-3; }
+  .prose-crm th { @apply bg-slate-900/90 text-slate-300 font-semibold px-3 py-2 text-left border border-slate-800; }
+  .prose-crm td { @apply px-3 py-2 border border-slate-900 text-slate-300; }
+  .prose-crm code { @apply bg-slate-800/80 text-indigo-300 px-1.5 py-0.5 rounded text-xs border border-indigo-500/20; }
+  .prose-crm hr { @apply border-slate-800/80 my-4; }
+  .prose-crm blockquote { @apply border-l-4 border-indigo-500 pl-4 text-slate-400 italic my-3 bg-indigo-500/5 py-2 rounded-r; }
 }
