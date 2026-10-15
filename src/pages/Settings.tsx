@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 export function Settings() {
   const [settings, setSettings] = useState<ProviderSettings | null>(null);

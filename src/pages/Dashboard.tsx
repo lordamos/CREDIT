@@ -24,7 +24,7 @@ import {
   Award
 } from 'lucide-react';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 const STAGE_ORDER: PipelineStage[] = ['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID', 'DISPUTE_ACTIVE', 'POST_CARE'];
 

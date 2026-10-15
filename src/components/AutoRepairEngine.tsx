@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Client } from '../types/credit';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 interface Props {
   client: Client;

@@ -11,7 +11,7 @@ import {
   Zap
 } from 'lucide-react';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 interface Props { token: string }
 

@@ -36,7 +36,7 @@ import type {
   BureauInvestigationDeadline
 } from '../../shared/types/credit.js';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 interface Props {
   client: Client;

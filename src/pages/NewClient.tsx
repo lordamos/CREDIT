@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 interface Props { navigate: (p: Page) => void; }
 

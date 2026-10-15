@@ -58,7 +58,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 const STAGE_ORDER: PipelineStage[] = ['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID', 'DISPUTE_ACTIVE', 'POST_CARE'];
 const AGENT_ORDER: AgentId[] = ['COMPREHENSIVE_AUDIT', 'ROADMAP_90_DAY', 'DEBT_OPTIMIZER', 'DISPUTE_LETTER', 'GOODWILL_LETTER', 'INQUIRY_MINIMIZER', 'SECONDARY_FREEZE', 'CREDIT_GROWTH'];

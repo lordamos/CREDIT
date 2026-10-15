@@ -37,7 +37,7 @@ import type {
 } from '../../shared/types/credit.js';
 import { DEFAULT_CREDIT_BUILDER_PRODUCTS } from '../../shared/types/credit.js';
 
-const API = 'http://localhost:3002/api';
+const API = '/api';
 
 interface Props {
   client: Client;
