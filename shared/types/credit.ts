@@ -206,6 +206,7 @@ export interface Client {
   businessType?: string;
   businessProfile?: BusinessProfile;
   truebuildProfile?: TrueBuildProfile;
+  positiveReportingSuite?: PositiveReportingSuite;
   // Contract
   plan: PricingPlan;
   stage: PipelineStage;
@@ -365,6 +366,184 @@ export const TRUEBUILD_DEFAULT_VENDORS: TrueBuildVendor[] = [
   { id: 11, name: 'Chase Ink Business Preferred', tier: 4, category: 'Commercial Bank Card', terms: 'Revolving', minInvoice: 500.0, reportsTo: 'Equifax, Experian', pgRequired: true, applicationUrl: 'https://creditcards.chase.com/business', underwritingTips: 'Requires personal guarantor credit score 680+.' },
   { id: 12, name: 'Bank of America Business Advantage', tier: 4, category: 'Credit Line / Card', terms: 'Revolving', minInvoice: 1000.0, reportsTo: 'Experian, Equifax', pgRequired: true, applicationUrl: 'https://www.bankofamerica.com/smallbusiness/credit-cards/', underwritingTips: 'Established commercial bank deposits accelerate limit increases.' },
 ];
+
+// ============================================================
+// POSITIVE TRADELINE & RENT/UTILITY REPORTING TYPES (RYEZING 10X)
+// ============================================================
+
+export type PositiveTradelineType =
+  | 'RENT'
+  | 'ELECTRIC'
+  | 'GAS'
+  | 'WATER'
+  | 'INTERNET'
+  | 'MOBILE'
+  | 'STREAMING'
+  | 'CREDIT_BUILDER';
+
+export interface PositiveTradeline {
+  id: string;
+  type: PositiveTradelineType;
+  providerName: string;
+  accountNumberMasked: string;
+  monthlyAmount: number;
+  startDate: string;
+  backdatedMonths: number; // 0 to 24 months retroactive verification
+  reportingBureaus: ('Equifax' | 'Experian' | 'TransUnion')[];
+  status: 'CONNECTED' | 'VERIFIED' | 'REPORTING' | 'PENDING';
+  lastReportedDate?: string;
+  onTimePaymentCount: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface RentReportingProfile {
+  landlordName: string;
+  propertyAddress: string;
+  monthlyRent: number;
+  leaseStartDate: string;
+  leaseEndDate?: string;
+  verificationMethod: 'BANK_PLAID' | 'PROPERTY_PORTAL' | 'LEASE_LEDGER' | 'CASH_RECEIPTS';
+  backdatingRequested: boolean;
+  backdatedMonths: number;
+  status: 'CONNECTED' | 'VERIFIED' | 'REPORTING';
+  verifiedAt?: string;
+}
+
+export interface MonthlyScoreProjectionPoint {
+  month: number;
+  label: string;
+  baselineScore: number;
+  projectedScore: number;
+  scoreGain: number;
+  milestoneReached?: string;
+  keyDrivers: string[];
+}
+
+export interface CreditFactorScoreItem {
+  name: string;
+  weight: number;
+  score: number;
+  rating: 'POOR' | 'FAIR' | 'GOOD' | 'EXCELLENT';
+  detail: string;
+  actionRecommendation: string;
+}
+
+export interface CreditFactorDiagnostic {
+  paymentHistory: CreditFactorScoreItem;
+  creditUtilization: CreditFactorScoreItem;
+  accountAge: CreditFactorScoreItem;
+  creditMix: CreditFactorScoreItem;
+  newCredit: CreditFactorScoreItem;
+  overallScoreEstimate: number;
+}
+
+export interface CreditBuilderProductRecommendation {
+  id: string;
+  name: string;
+  provider: string;
+  type: 'SECURED_CARD' | 'INSTALLMENT_BUILDER' | 'REVOLVING_LINE';
+  minDepositOrFee: string;
+  reportsTo: string;
+  noHardPull: boolean;
+  approvalOdds: 'GUARANTEED' | 'EXCELLENT' | 'VERY_HIGH';
+  targetScoreTier: string;
+  applicationUrl: string;
+  highlightBenefit: string;
+}
+
+export const DEFAULT_CREDIT_BUILDER_PRODUCTS: CreditBuilderProductRecommendation[] = [
+  {
+    id: 'prod-self',
+    name: 'Self Credit Builder Account',
+    provider: 'Self Financial (Lead Bank / Sunrise Banks)',
+    type: 'INSTALLMENT_BUILDER',
+    minDepositOrFee: '$25/month installment',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: true,
+    approvalOdds: 'GUARANTEED',
+    targetScoreTier: 'Any Score (Under 580 Welcome)',
+    applicationUrl: 'https://www.self.inc',
+    highlightBenefit: 'Builds forced savings while reporting 12-24 months of on-time installment payments without hard inquiry.'
+  },
+  {
+    id: 'prod-kikoff',
+    name: 'Kikoff Credit Line ($750)',
+    provider: 'Kikoff Inc.',
+    type: 'REVOLVING_LINE',
+    minDepositOrFee: '$5/month service fee',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: true,
+    approvalOdds: 'GUARANTEED',
+    targetScoreTier: 'No Credit / Rebuilding (< 620)',
+    applicationUrl: 'https://kikoff.com',
+    highlightBenefit: 'Instant $750 revolving credit line at 0% APR. Lowers overall utilization ratio instantly.'
+  },
+  {
+    id: 'prod-opensky',
+    name: 'OpenSky® Secured Visa®',
+    provider: 'Capital Bank, N.A.',
+    type: 'SECURED_CARD',
+    minDepositOrFee: '$200 refundable deposit',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: true,
+    approvalOdds: 'GUARANTEED',
+    targetScoreTier: 'No Credit Check Required (300 - 600)',
+    applicationUrl: 'https://www.openskycc.com',
+    highlightBenefit: 'Zero credit check required. Reports to all 3 credit bureaus monthly as a primary revolving tradeline.'
+  },
+  {
+    id: 'prod-discover-secured',
+    name: 'Discover it® Secured Credit Card',
+    provider: 'Discover Bank',
+    type: 'SECURED_CARD',
+    minDepositOrFee: '$200 refundable deposit',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: false,
+    approvalOdds: 'EXCELLENT',
+    targetScoreTier: 'Rebuilding (560 - 660)',
+    applicationUrl: 'https://www.discover.com/credit-cards/secured/',
+    highlightBenefit: '2% cash back at gas stations & restaurants. Automatic monthly review starting at month 7 to transition to unsecured.'
+  },
+  {
+    id: 'prod-credit-strong',
+    name: 'Credit Strong MAGNUM ($10,000)',
+    provider: 'Austin Capital Bank',
+    type: 'INSTALLMENT_BUILDER',
+    minDepositOrFee: '$55/month',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: true,
+    approvalOdds: 'VERY_HIGH',
+    targetScoreTier: 'Commercial & Personal Scaling (600+)',
+    applicationUrl: 'https://www.creditstrong.com',
+    highlightBenefit: 'Large $10,000 installment tradeline. Perfect for positioning for high-limit commercial funding.'
+  },
+  {
+    id: 'prod-ava',
+    name: 'Ava Credit Builder & Card',
+    provider: 'Ava Financial',
+    type: 'REVOLVING_LINE',
+    minDepositOrFee: '$0 annual fee ($6/mo builder)',
+    reportsTo: 'Equifax, Experian, TransUnion',
+    noHardPull: true,
+    approvalOdds: 'GUARANTEED',
+    targetScoreTier: 'Thin File / Rebuilding (< 650)',
+    applicationUrl: 'https://meetava.com',
+    highlightBenefit: 'Revolving card dedicated exclusively for subscriptions (Netflix, Spotify) ensuring 0% missed payment risk.'
+  }
+];
+
+export interface PositiveReportingSuite {
+  tradelines: PositiveTradeline[];
+  rentProfile?: RentReportingProfile;
+  projection: MonthlyScoreProjectionPoint[];
+  factorDiagnostic?: CreditFactorDiagnostic;
+  recommendedProducts: CreditBuilderProductRecommendation[];
+  totalMonthlyReportingAmount: number;
+  totalSeasonedMonthsAdded: number;
+  projected6MonthGain: number;
+  updatedAt: string;
+}
 
 export interface ProviderSettings {
   name: string;

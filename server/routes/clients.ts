@@ -23,6 +23,13 @@ import {
 } from '../core/fcraEngine.js';
 import { generateClientCustomDisputeLetters } from '../core/letterCustomizer.js';
 import { sendLetterThroughLetterStream } from '../core/letterstream.js';
+import {
+  initializePositiveReportingSuite,
+  calculateScoreProjection,
+  calculateFactorDiagnostic,
+  CREDIT_BUILDER_PRODUCTS
+} from '../core/positiveTradelineEngine.js';
+import type { PositiveTradeline, RentReportingProfile } from '../../shared/types/credit.js';
 
 export const clientRouter = express.Router();
 
@@ -903,6 +910,269 @@ clientRouter.post('/:id/letterstream/send', async (req, res) => {
     }
   });
 });
+
+// ============================================================
+// POSITIVE TRADELINES & 6-MONTH DUAL SIMULATOR (RYEZING 10X)
+// ============================================================
+
+// GET /api/clients/:id/positive-reporting
+clientRouter.get('/:id/positive-reporting', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.positiveReportingSuite) {
+    client.positiveReportingSuite = initializePositiveReportingSuite(client);
+    saveClient(client);
+  }
+
+  res.json({
+    success: true,
+    data: client.positiveReportingSuite
+  });
+});
+
+// POST /api/clients/:id/positive-reporting/tradelines
+clientRouter.post('/:id/positive-reporting/tradelines', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.positiveReportingSuite) {
+    client.positiveReportingSuite = initializePositiveReportingSuite(client);
+  }
+
+  const {
+    type = 'ELECTRIC',
+    providerName,
+    accountNumberMasked,
+    monthlyAmount = 75,
+    startDate,
+    backdatedMonths = 12,
+    reportingBureaus = ['Equifax', 'Experian', 'TransUnion'],
+    notes
+  } = req.body;
+
+  if (!providerName) {
+    return res.status(400).json({ success: false, error: 'Provider name is required' });
+  }
+
+  const newTradeline: PositiveTradeline = {
+    id: uuidv4(),
+    type,
+    providerName,
+    accountNumberMasked: accountNumberMasked || `****${Math.floor(1000 + Math.random() * 9000)}`,
+    monthlyAmount: Number(monthlyAmount),
+    startDate: startDate || new Date(Date.now() - backdatedMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    backdatedMonths: Number(backdatedMonths),
+    reportingBureaus,
+    status: 'REPORTING',
+    lastReportedDate: new Date().toISOString().split('T')[0],
+    onTimePaymentCount: Number(backdatedMonths),
+    notes,
+    createdAt: new Date().toISOString()
+  };
+
+  client.positiveReportingSuite.tradelines.push(newTradeline);
+
+  // Recalculate totals and projection
+  const suite = client.positiveReportingSuite;
+  suite.totalMonthlyReportingAmount = suite.tradelines.reduce((acc, t) => acc + t.monthlyAmount, 0);
+  suite.totalSeasonedMonthsAdded = suite.tradelines.reduce((acc, t) => acc + t.backdatedMonths, 0);
+
+  const rentTradeline = suite.tradelines.find(t => t.type === 'RENT');
+  const utilAmount = suite.tradelines.filter(t => t.type !== 'RENT').reduce((acc, t) => acc + t.monthlyAmount, 0);
+
+  suite.projection = calculateScoreProjection({
+    startingScore: client.creditProfile.currentScores.experian || 545,
+    monthlyRent: rentTradeline ? rentTradeline.monthlyAmount : 1450,
+    monthlyUtilities: utilAmount || 200,
+    backdatedRentMonths: rentTradeline ? rentTradeline.backdatedMonths : 24,
+    disputesPendingCount: client.creditProfile.negativeItems.length || 4,
+    creditUtilizationPercent: client.creditProfile.currentUtilization || 50,
+    profileSituation: 'REBUILDING'
+  });
+
+  suite.factorDiagnostic = calculateFactorDiagnostic(client, suite.tradelines);
+  suite.projected6MonthGain = suite.projection[suite.projection.length - 1].scoreGain;
+  suite.updatedAt = new Date().toISOString();
+
+  client.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({
+    success: true,
+    data: {
+      suite: client.positiveReportingSuite,
+      client
+    }
+  });
+});
+
+// DELETE /api/clients/:id/positive-reporting/tradelines/:tradelineId
+clientRouter.delete('/:id/positive-reporting/tradelines/:tradelineId', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.positiveReportingSuite) {
+    client.positiveReportingSuite = initializePositiveReportingSuite(client);
+  }
+
+  client.positiveReportingSuite.tradelines = client.positiveReportingSuite.tradelines.filter(
+    t => t.id !== req.params.tradelineId
+  );
+
+  const suite = client.positiveReportingSuite;
+  suite.totalMonthlyReportingAmount = suite.tradelines.reduce((acc, t) => acc + t.monthlyAmount, 0);
+  suite.totalSeasonedMonthsAdded = suite.tradelines.reduce((acc, t) => acc + t.backdatedMonths, 0);
+  suite.factorDiagnostic = calculateFactorDiagnostic(client, suite.tradelines);
+  suite.updatedAt = new Date().toISOString();
+
+  client.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({
+    success: true,
+    data: {
+      suite: client.positiveReportingSuite,
+      client
+    }
+  });
+});
+
+// POST /api/clients/:id/positive-reporting/rent-profile
+clientRouter.post('/:id/positive-reporting/rent-profile', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.positiveReportingSuite) {
+    client.positiveReportingSuite = initializePositiveReportingSuite(client);
+  }
+
+  const {
+    landlordName,
+    propertyAddress,
+    monthlyRent,
+    leaseStartDate,
+    verificationMethod = 'BANK_PLAID',
+    backdatingRequested = true,
+    backdatedMonths = 24
+  } = req.body;
+
+  const rentProfile: RentReportingProfile = {
+    landlordName: landlordName || 'Property Management / Landlord',
+    propertyAddress: propertyAddress || `${client.address}, ${client.city}, ${client.state} ${client.zip}`,
+    monthlyRent: Number(monthlyRent) || 1450,
+    leaseStartDate: leaseStartDate || new Date(Date.now() - backdatedMonths * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    verificationMethod,
+    backdatingRequested: Boolean(backdatingRequested),
+    backdatedMonths: Number(backdatedMonths),
+    status: 'REPORTING',
+    verifiedAt: new Date().toISOString()
+  };
+
+  client.positiveReportingSuite.rentProfile = rentProfile;
+
+  // Sync to tradeline list
+  const existingRentTradeline = client.positiveReportingSuite.tradelines.find(t => t.type === 'RENT');
+  if (existingRentTradeline) {
+    existingRentTradeline.providerName = rentProfile.landlordName;
+    existingRentTradeline.monthlyAmount = rentProfile.monthlyRent;
+    existingRentTradeline.backdatedMonths = rentProfile.backdatedMonths;
+    existingRentTradeline.onTimePaymentCount = rentProfile.backdatedMonths;
+    existingRentTradeline.status = 'REPORTING';
+  } else {
+    client.positiveReportingSuite.tradelines.unshift({
+      id: uuidv4(),
+      type: 'RENT',
+      providerName: rentProfile.landlordName,
+      accountNumberMasked: '****4819',
+      monthlyAmount: rentProfile.monthlyRent,
+      startDate: rentProfile.leaseStartDate,
+      backdatedMonths: rentProfile.backdatedMonths,
+      reportingBureaus: ['Equifax', 'Experian', 'TransUnion'],
+      status: 'REPORTING',
+      lastReportedDate: new Date().toISOString().split('T')[0],
+      onTimePaymentCount: rentProfile.backdatedMonths,
+      notes: `${rentProfile.backdatedMonths} months retroactive rent verified via ${rentProfile.verificationMethod}`,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  const suite = client.positiveReportingSuite;
+  suite.totalMonthlyReportingAmount = suite.tradelines.reduce((acc, t) => acc + t.monthlyAmount, 0);
+  suite.totalSeasonedMonthsAdded = suite.tradelines.reduce((acc, t) => acc + t.backdatedMonths, 0);
+  suite.factorDiagnostic = calculateFactorDiagnostic(client, suite.tradelines);
+
+  suite.projection = calculateScoreProjection({
+    startingScore: client.creditProfile.currentScores.experian || 545,
+    monthlyRent: rentProfile.monthlyRent,
+    monthlyUtilities: suite.tradelines.filter(t => t.type !== 'RENT').reduce((acc, t) => acc + t.monthlyAmount, 0) || 200,
+    backdatedRentMonths: rentProfile.backdatedMonths,
+    disputesPendingCount: client.creditProfile.negativeItems.length || 4,
+    creditUtilizationPercent: client.creditProfile.currentUtilization || 50,
+    profileSituation: 'REBUILDING'
+  });
+  suite.projected6MonthGain = suite.projection[suite.projection.length - 1].scoreGain;
+  suite.updatedAt = new Date().toISOString();
+
+  client.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({
+    success: true,
+    data: {
+      suite: client.positiveReportingSuite,
+      client
+    }
+  });
+});
+
+// POST /api/clients/:id/positive-reporting/simulate
+clientRouter.post('/:id/positive-reporting/simulate', (req, res) => {
+  const client = getClientById(req.params.id);
+  if (!client) return res.status(404).json({ success: false, error: 'Client not found' });
+
+  if (!client.positiveReportingSuite) {
+    client.positiveReportingSuite = initializePositiveReportingSuite(client);
+  }
+
+  const {
+    monthlyRent = 1450,
+    monthlyUtilities = 240,
+    backdatedRentMonths = 24,
+    disputesPendingCount = 4,
+    creditUtilizationPercent = 55,
+    profileSituation = 'REBUILDING'
+  } = req.body;
+
+  const startingScore = client.creditProfile.currentScores.experian
+    || client.creditProfile.currentScores.transunion
+    || client.creditProfile.currentScores.equifax
+    || 545;
+
+  const projection = calculateScoreProjection({
+    startingScore,
+    monthlyRent: Number(monthlyRent),
+    monthlyUtilities: Number(monthlyUtilities),
+    backdatedRentMonths: Number(backdatedRentMonths),
+    disputesPendingCount: Number(disputesPendingCount),
+    creditUtilizationPercent: Number(creditUtilizationPercent),
+    profileSituation
+  });
+
+  client.positiveReportingSuite.projection = projection;
+  client.positiveReportingSuite.projected6MonthGain = projection[projection.length - 1].scoreGain;
+  client.positiveReportingSuite.updatedAt = new Date().toISOString();
+  saveClient(client);
+
+  res.json({
+    success: true,
+    data: {
+      projection,
+      projected6MonthGain: client.positiveReportingSuite.projected6MonthGain
+    }
+  });
+});
+
 
 
 

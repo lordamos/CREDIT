@@ -17,6 +17,7 @@ import { PIPELINE_STAGES, AGENT_META, EMAIL_STAGE_META, TRUEBUILD_DEFAULT_VENDOR
 import type { Page } from '../App';
 import { AutoRepairEngine } from '../components/AutoRepairEngine';
 import { FcraWalkthroughEngine } from '../components/FcraWalkthroughEngine';
+import { PositiveTradelinesEngine } from '../components/PositiveTradelinesEngine';
 import { 
   ArrowLeft, 
   Bot, 
@@ -66,7 +67,7 @@ const EMAIL_STAGES: EmailStage[] = ['WELCOME', 'DOCS_VERIFIED', 'SUBMITTED', 'AP
 
 interface Props { clientId: string; navigate: (p: Page) => void; }
 
-type Tab = 'overview' | 'fcra-strategy' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
+type Tab = 'overview' | 'fcra-strategy' | 'positive-tradelines' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
 
 function renderMarkdown(text: string): string {
   return text
@@ -346,6 +347,7 @@ export function ClientDetail({ clientId, navigate }: Props) {
   const tabs: { id: Tab; label: string; icon: any; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'fcra-strategy', label: 'FCRA 5-Step Engine', icon: ShieldAlert, count: 5 },
+    { id: 'positive-tradelines', label: 'Positive Tradelines & Simulator', icon: TrendingUp, count: client.positiveReportingSuite?.tradelines?.length ?? 4 },
     { id: 'repair', label: 'Auto Repair', icon: Wrench },
     { id: 'business-audit', label: 'Commercial Audit (5 Prompts)', icon: Building2, count: bizAuditsDone },
     { id: 'truebuild', label: 'Corporate Credit (TrueBuild)', icon: Award, count: truebuildData?.profile?.tradelines?.length ?? client.truebuildProfile?.tradelines?.length ?? 0 },
@@ -575,6 +577,11 @@ export function ClientDetail({ clientId, navigate }: Props) {
             <FcraWalkthroughEngine client={client} onUpdate={(updated) => setClient(updated)} />
           )}
 
+          {/* Tab: Positive Tradelines & Simulator (Ryezing 10x) */}
+          {tab === 'positive-tradelines' && (
+            <PositiveTradelinesEngine client={client} onUpdate={(updated) => setClient(updated)} />
+          )}
+
           {/* Tab: Auto Repair */}
           {tab === 'repair' && (
             <div className="glass-card rounded-2xl p-6">
@@ -589,27 +596,53 @@ export function ClientDetail({ clientId, navigate }: Props) {
           {/* Tab: Overview */}
           {tab === 'overview' && (
             <div className="grid md:grid-cols-2 gap-6">
-              {/* FCRA Deletion Engine Quick Jump Hero */}
-              <div className="md:col-span-2 relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md hover:border-border-gold transition-all duration-300">
+              {/* Dual-Action Pillar 1: FCRA Deletion Engine */}
+              <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-border-hairline p-6 shadow-lux-md hover:border-border-gold transition-all duration-300 flex flex-col justify-between">
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.03] to-transparent"></div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-lux-gold">
-                      <ShieldAlert className="w-4 h-4" />
-                      <span>FCRA Jurisprudence & Tri-Bureau Discrepancy Engine</span>
-                    </div>
-                    <h3 className="text-lg font-bold text-white">
-                      5-Step Deletion Strategy & Statutory Compensation
-                    </h3>
-                    <p className="text-xs text-slate-300 max-w-2xl">
-                      Cross-compare 15 Metro 2 fields across Equifax, Experian, and TransUnion. Leverage 15 U.S.C. § 1681i, § 1681e(b), § 1681n ($1,000 statutory damages), and the Debt Placement vs. Ownership doctrine.
-                    </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-lux-gold">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>Pillar 1: Forensic Derogatory Removal</span>
                   </div>
+                  <h3 className="text-base font-bold text-white">
+                    5-Step FCRA Deletion Engine & LetterStream Dispatch
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Cross-compare 15 Metro 2 fields across Equifax, Experian, and TransUnion. Generate 100% custom non-template disputes and dispatch via USPS Certified Mail.
+                  </p>
+                </div>
+                <div className="pt-4 mt-2">
                   <button
                     onClick={() => setTab('fcra-strategy')}
-                    className="inline-flex items-center gap-2 rounded-xl border border-border-gold bg-lux-gold/10 px-5 py-2.5 text-xs font-bold text-lux-gold hover:bg-lux-gold hover:text-canvas-base transition-colors shrink-0 shadow-glow-gold"
+                    className="inline-flex items-center gap-2 rounded-xl border border-border-gold bg-lux-gold/10 px-4 py-2 text-xs font-bold text-lux-gold hover:bg-lux-gold hover:text-canvas-base transition-colors shadow-glow-gold"
                   >
-                    Launch 5-Step Walkthrough
+                    Launch 5-Step FCRA Engine
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Dual-Action Pillar 2: Positive Tradelines & Simulator */}
+              <div className="relative overflow-hidden rounded-2xl bg-surface-subtle/80 backdrop-blur-lux border border-emerald-500/30 p-6 shadow-lux-md hover:border-emerald-500/60 transition-all duration-300 flex flex-col justify-between">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/[0.04] to-transparent"></div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>Pillar 2: Positive Tradeline Acceleration</span>
+                  </div>
+                  <h3 className="text-base font-bold text-white">
+                    24-Mo Rent Reporting & 6-Month Score Simulator
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Convert existing living expenses (Rent, Electric, Gas, Internet) into primary tradelines with up to 24 months of retroactive backdating to leapfrog into prime scores.
+                  </p>
+                </div>
+                <div className="pt-4 mt-2">
+                  <button
+                    onClick={() => setTab('positive-tradelines')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/50 bg-emerald-500/15 px-4 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500 hover:text-canvas-base transition-colors"
+                  >
+                    Launch Positive Builder & Simulator
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
