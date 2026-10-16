@@ -21,10 +21,11 @@ import {
   X,
   FileSpreadsheet,
   Shield,
-  Award
+  Award,
+  Compass
 } from 'lucide-react';
 
-const API = '/api';
+const API = 'http://localhost:3002/api';
 
 const STAGE_ORDER: PipelineStage[] = ['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID', 'DISPUTE_ACTIVE', 'POST_CARE'];
 
@@ -189,6 +190,40 @@ export function Dashboard({ navigate }: Props) {
               <span>Onboard New Client</span>
             </motion.button>
           </div>
+        </div>
+      </motion.div>
+
+      {/* The Covenant of Transparency Architectural Banner */}
+      <motion.div 
+        variants={itemVariants}
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/10 via-[#101018]/90 to-indigo-600/10 p-6 border border-amber-500/25 shadow-lux-md flex flex-col md:flex-row md:items-center justify-between gap-6"
+      >
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 shadow-inner">
+            <Compass className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                Core Philosophy
+              </span>
+              <span className="text-xs text-slate-400 font-medium">The "Why" and the "Wow"</span>
+            </div>
+            <h3 className="text-lg font-bold text-white mt-1">The Covenant of Transparency</h3>
+            <p className="text-xs text-slate-300 max-w-2xl mt-1 leading-relaxed">
+              "Truth is established not by what you say, but by the safety of the container you create. If you are a Judge, your partner will hide. If you are an Architect, your partner will build."
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex items-center gap-3">
+          <button
+            onClick={() => navigate({ name: 'covenant' })}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/20 transition-all hover:scale-105 active:scale-95"
+          >
+            <span>Review Covenant</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </motion.div>
 

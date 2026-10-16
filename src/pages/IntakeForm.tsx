@@ -8,10 +8,11 @@ import {
   Sparkles, 
   AlertCircle,
   RefreshCw,
-  Zap
+  Zap,
+  Compass
 } from 'lucide-react';
 
-const API = '/api';
+const API = 'http://localhost:3002/api';
 
 interface Props { token: string }
 
@@ -22,6 +23,7 @@ export function IntakeForm({ token }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [covenantAgreed, setCovenantAgreed] = useState(true);
 
   const submit = async () => {
     if (!reportText || reportText.trim().length < 50) {
@@ -121,9 +123,31 @@ export function IntakeForm({ token }: Props) {
             </div>
           )}
 
+          {/* Covenant of Transparency Client Pledge */}
+          <div className="p-4 rounded-2xl bg-amber-500/[0.08] border border-amber-500/30 space-y-2">
+            <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
+              <Compass className="w-4 h-4 text-amber-400" />
+              <span>The Covenant of Transparency</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed italic">
+              "Truth is established not by what you say, but by the safety of the container you create. We do not punish the truth; we reward it with the space to fix the problem as an Architect."
+            </p>
+            <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={covenantAgreed}
+                onChange={e => setCovenantAgreed(e.target.checked)}
+                className="mt-0.5 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/20"
+              />
+              <span className="text-[11px] text-slate-200 font-medium">
+                I commit to complete transparency—answering the intent, not just the literal words, so we can build together.
+              </span>
+            </label>
+          </div>
+
           <button
             onClick={submit}
-            disabled={submitting || reportText.trim().length < 50}
+            disabled={submitting || reportText.trim().length < 50 || !covenantAgreed}
             className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30"
           >
             {submitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}

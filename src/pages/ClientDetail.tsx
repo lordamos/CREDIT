@@ -18,6 +18,7 @@ import type { Page } from '../App';
 import { AutoRepairEngine } from '../components/AutoRepairEngine';
 import { FcraWalkthroughEngine } from '../components/FcraWalkthroughEngine';
 import { PositiveTradelinesEngine } from '../components/PositiveTradelinesEngine';
+import { CovenantOfTransparency } from '../components/CovenantOfTransparency';
 import { 
   ArrowLeft, 
   Bot, 
@@ -54,11 +55,12 @@ import {
   ExternalLink,
   PlusCircle,
   FastForward,
-  ShieldAlert
+  ShieldAlert,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = '/api';
+const API = 'http://localhost:3002/api';
 
 const STAGE_ORDER: PipelineStage[] = ['NEW', 'DOCS_VERIFIED', 'SUBMITTED', 'APPROVED', 'INVOICE_SENT', 'PAID', 'DISPUTE_ACTIVE', 'POST_CARE'];
 const AGENT_ORDER: AgentId[] = ['COMPREHENSIVE_AUDIT', 'ROADMAP_90_DAY', 'DEBT_OPTIMIZER', 'DISPUTE_LETTER', 'GOODWILL_LETTER', 'INQUIRY_MINIMIZER', 'SECONDARY_FREEZE', 'CREDIT_GROWTH'];
@@ -67,7 +69,7 @@ const EMAIL_STAGES: EmailStage[] = ['WELCOME', 'DOCS_VERIFIED', 'SUBMITTED', 'AP
 
 interface Props { clientId: string; navigate: (p: Page) => void; }
 
-type Tab = 'overview' | 'fcra-strategy' | 'positive-tradelines' | 'repair' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
+type Tab = 'overview' | 'fcra-strategy' | 'positive-tradelines' | 'repair' | 'covenant' | 'business-audit' | 'truebuild' | 'agents' | 'emails' | 'disputes' | 'agreement';
 
 function renderMarkdown(text: string): string {
   return text
@@ -348,6 +350,7 @@ export function ClientDetail({ clientId, navigate }: Props) {
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'fcra-strategy', label: 'FCRA 5-Step Engine', icon: ShieldAlert, count: 5 },
     { id: 'positive-tradelines', label: 'Positive Tradelines & Simulator', icon: TrendingUp, count: client.positiveReportingSuite?.tradelines?.length ?? 4 },
+    { id: 'covenant', label: 'Covenant of Transparency', icon: Compass },
     { id: 'repair', label: 'Auto Repair', icon: Wrench },
     { id: 'business-audit', label: 'Commercial Audit (5 Prompts)', icon: Building2, count: bizAuditsDone },
     { id: 'truebuild', label: 'Corporate Credit (TrueBuild)', icon: Award, count: truebuildData?.profile?.tradelines?.length ?? client.truebuildProfile?.tradelines?.length ?? 0 },
@@ -580,6 +583,15 @@ export function ClientDetail({ clientId, navigate }: Props) {
           {/* Tab: Positive Tradelines & Simulator (Ryezing 10x) */}
           {tab === 'positive-tradelines' && (
             <PositiveTradelinesEngine client={client} onUpdate={(updated) => setClient(updated)} />
+          )}
+
+          {/* Tab: Covenant of Transparency */}
+          {tab === 'covenant' && (
+            <div className="glass-card rounded-3xl p-6 md:p-8 border border-amber-500/20 shadow-2xl">
+              <CovenantOfTransparency 
+                signatoryName={`${client.firstName} ${client.lastName}`} 
+              />
+            </div>
           )}
 
           {/* Tab: Auto Repair */}

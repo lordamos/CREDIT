@@ -4,6 +4,7 @@ import { ClientDetail } from './pages/ClientDetail';
 import { NewClient } from './pages/NewClient';
 import { Settings } from './pages/Settings';
 import { IntakeForm } from './pages/IntakeForm';
+import { CovenantOfTransparency } from './components/CovenantOfTransparency';
 import { 
   LayoutDashboard, 
   UserPlus, 
@@ -13,7 +14,8 @@ import {
   Zap,
   Activity,
   Layers,
-  Search
+  Search,
+  Compass
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -22,6 +24,7 @@ export type Page =
   | { name: 'client'; id: string }
   | { name: 'new-client' }
   | { name: 'settings' }
+  | { name: 'covenant' }
   | { name: 'intake'; token: string };
 
 export default function App() {
@@ -39,6 +42,8 @@ export default function App() {
         setPage({ name: 'new-client' });
       } else if (hash === '#/settings') {
         setPage({ name: 'settings' });
+      } else if (hash === '#/covenant') {
+        setPage({ name: 'covenant' });
       } else {
         setPage({ name: 'dashboard' });
       }
@@ -53,6 +58,7 @@ export default function App() {
     else if (p.name === 'client') window.location.hash = `#/client/${p.id}`;
     else if (p.name === 'new-client') window.location.hash = '#/new';
     else if (p.name === 'settings') window.location.hash = '#/settings';
+    else if (p.name === 'covenant') window.location.hash = '#/covenant';
     setPage(p);
   };
 
@@ -64,6 +70,7 @@ export default function App() {
   const navItems = [
     { id: 'dashboard', label: 'Operations Dashboard', icon: LayoutDashboard },
     { id: 'new-client', label: 'Client Intake', icon: UserPlus },
+    { id: 'covenant', label: 'Covenant of Transparency', icon: Compass },
     { id: 'settings', label: 'Engine Config', icon: SettingsIcon },
   ];
 
@@ -139,6 +146,14 @@ export default function App() {
 
           {/* Right Status Pill & Fast Action */}
           <div className="hidden lg:flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => navigate({ name: 'covenant' })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-indigo-600/15 to-amber-500/10 hover:from-amber-500/25 hover:to-indigo-600/25 border border-amber-500/30 text-[11px] font-bold text-amber-300 transition-all shadow-lux-sm hover:scale-105"
+              title="Open The Covenant of Transparency"
+            >
+              <Compass className="w-3.5 h-3.5 text-amber-400" />
+              <span>The Covenant</span>
+            </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-subtle/80 border border-white/[0.06] text-[11px] text-slate-300">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
               <span>FCRA Telemetry Active</span>
@@ -163,6 +178,11 @@ export default function App() {
             {page.name === 'client' && <ClientDetail clientId={page.id} navigate={navigate} />}
             {page.name === 'new-client' && <NewClient navigate={navigate} />}
             {page.name === 'settings' && <Settings />}
+            {page.name === 'covenant' && (
+              <div className="max-w-6xl mx-auto p-6 md:p-8">
+                <CovenantOfTransparency />
+              </div>
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
