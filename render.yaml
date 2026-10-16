@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: credit-acceleration-crm
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    domains:
+      - credit.sumthin3lse.com
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
